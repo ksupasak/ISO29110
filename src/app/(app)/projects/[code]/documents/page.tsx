@@ -29,14 +29,14 @@ export default async function DocumentsPage({ params }: PageProps<"/projects/[co
       {phases.map(({ phase, items }) => (
         <Card key={phase.no}>
           <CardHeader>
-            <CardTitle>{`${pad(phase.no)} ${phase.folder} (${phase.process})`}</CardTitle>
+            <CardTitle data-testid="phase-heading">{`${pad(phase.no)} ${phase.folder} (${phase.process})`}</CardTitle>
           </CardHeader>
           <CardContent className="divide-y">
             {items.map((item) => {
               const label = `${pad(item.wp.seq)} · ${item.wp.code} ${item.wp.name}`;
               const options = ["Draft", ...item.wp.states].filter((s) => s !== "Baselined" || canBaseline || item.status === "Baselined");
               return (
-                <div key={item.id} className="space-y-2 py-3">
+                <div key={item.id} data-testid="wp-row" className="space-y-2 py-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{label}</span>
                     <Badge variant="secondary">{item.status}</Badge>

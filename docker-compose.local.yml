@@ -1,0 +1,14 @@
+# Override for developer machines that cannot create new Docker networks
+# ("all predefined address pools have been fully subnetted").
+# NOT for the company server. Use together with the base file:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+services:
+  postgres:
+    network_mode: bridge
+  app:
+    network_mode: bridge
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # Same credentials as POSTGRES_PASSWORD, reached through the published host port.
+      DATABASE_URL: postgresql://esm:${POSTGRES_PASSWORD}@host.docker.internal:5432/esm

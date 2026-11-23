@@ -3,18 +3,39 @@ name: esm-project
 services:
   postgres:
     image: postgres:16
-    # Uses the default bridge network: avoids allocating a per-project network
-    # (Docker address pools can be exhausted on machines running many stacks).
-    network_mode: bridge
-    ports:
-      - "5432:5432"
+    restart: unless-stopped
     environment:
       POSTGRES_USER: esm
-      POSTGRES_PASSWORD: esm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: esm
+    # Published on loopback only (for pg_dump / psql on the server itself).
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U esm -d esm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      FILE_STORAGE_DIR: /data/files
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+    volumes:
+      - files:/data/files
 
 volumes:
   pgdata:
+  files:

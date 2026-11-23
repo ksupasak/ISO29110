@@ -37,7 +37,7 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
     ["สถานะ", <Badge key="s" variant="secondary">{STATUS_LABEL[project.status]}</Badge>],
     ["วันเริ่ม", formatThaiDate(project.startDate) || "-"],
     ["วันสิ้นสุด", formatThaiDate(project.endDate) || "-"],
-    ["งบประมาณ", project.budget ? formatBaht(project.budget.toFixed(2)) : "-"],
+    ["งบประมาณ", project.budget != null ? formatBaht(project.budget.toFixed(2)) : "-"],
     ["รายละเอียด", project.description ? <span key="d" className="whitespace-pre-wrap">{project.description}</span> : "-"],
   ];
 
@@ -56,7 +56,7 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
                 status: project.status,
                 startDate: isoDate(project.startDate),
                 endDate: isoDate(project.endDate),
-                budget: project.budget ? project.budget.toFixed(2) : "",
+                budget: project.budget != null ? project.budget.toFixed(2) : "",
                 description: project.description ?? "",
               }}
             />

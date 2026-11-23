@@ -1,36 +1,124 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ระบบบริหารโครงการ ISO/IEC 29110
 
-## Getting Started
+ระบบภายในบริษัทสำหรับบริหารโครงการซอฟต์แวร์ตามมาตรฐาน ISO/IEC 29110 พัฒนาด้วย Next.js 16 และ PostgreSQL
+รุ่นที่ 1 (Release 1) ครอบคลุม: การเข้าสู่ระบบ, การจัดการผู้ใช้, โครงการ, ทีมงานและบทบาท, และคลังเอกสาร Work Product (อัปโหลดไฟล์เป็นเวอร์ชัน, สถานะเอกสาร, ไฟล์แนบหลักฐาน)
 
-First, run the development server:
+- เฉพาะผู้ดูแลระบบ (ADMIN) เท่านั้นที่สร้างโครงการและกำหนดผู้จัดการโครงการ (PM) คนแรก
+- ไม่มีการล็อกอินสำหรับลูกค้า และไม่มีลายเซ็นอิเล็กทรอนิกส์ เอกสารเป็นไฟล์ที่อัปโหลด (ไม่เกิน 50 MB)
+
+## สิ่งที่ต้องมี
+
+- เซิร์ฟเวอร์ Linux ที่ติดตั้ง Docker Engine และ Docker Compose v2 (`docker compose`)
+- พอร์ต 3000 ว่าง (เปลี่ยนได้ด้วย `APP_PORT` ใน `.env`)
+- ถ้าให้บริการผ่าน HTTPS ควรมี reverse proxy (เช่น nginx) ด้านหน้า
+
+## ติดตั้งครั้งแรกบนเซิร์ฟเวอร์
+
+1. นำซอร์สโค้ดมาไว้บนเซิร์ฟเวอร์ (เช่น `git clone`) แล้วเข้าไปที่โฟลเดอร์โปรเจกต์
+2. สร้างไฟล์ตั้งค่า
+
+   ```bash
+   cp .env.example .env
+   ```
+
+3. แก้ไข `.env` **ต้องเปลี่ยนรหัสผ่านทุกค่า**
+
+   | ตัวแปร | ความหมาย |
+   |---|---|
+   | `POSTGRES_PASSWORD` | รหัสผ่านฐานข้อมูล (ใช้ตอนสร้างฐานข้อมูลครั้งแรกเท่านั้น) |
+   | `DATABASE_URL` | `postgresql://esm:<POSTGRES_PASSWORD>@postgres:5432/esm` (โฮสต์คือ `postgres`, รหัสผ่านต้องตรงกับข้างบน) |
+   | `SEED_ADMIN_PASSWORD` | รหัสผ่านเริ่มต้นของผู้ใช้ `admin` |
+   | `SESSION_COOKIE_SECURE` | ตั้งเป็น `true` เมื่อใช้งานผ่าน HTTPS |
+   | `APP_PORT` | (ไม่บังคับ) พอร์ตของแอปบนเครื่อง ค่าเริ่มต้น 3000 |
+
+   ห้าม commit ไฟล์ `.env`
+
+4. สร้างและเริ่มระบบ (แอปจะรัน `prisma migrate deploy` เองทุกครั้งที่เริ่ม)
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+5. ตรวจสอบ: `curl -sI http://localhost:3000/login` ต้องตอบ `200`
+
+### สร้างผู้ดูแลระบบคนแรก
+
+รันคำสั่งนี้ **หนึ่งครั้ง** หลังติดตั้ง (ต้องตั้ง `SEED_ADMIN_PASSWORD` ใน `.env` ไว้แล้ว):
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+docker compose exec app npx tsx prisma/seed.ts
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+จะได้ผู้ใช้ `admin` พร้อมรหัสผ่านตาม `SEED_ADMIN_PASSWORD` (รันซ้ำจะรีเซ็ตรหัสผ่านของ `admin`)
+จากนั้นเข้าสู่ระบบที่ `http://<เซิร์ฟเวอร์>:3000` แล้วสร้างผู้ใช้อื่นที่เมนู "ผู้ใช้งาน"
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## สำรองข้อมูลและกู้คืน
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+ข้อมูลอยู่ 2 ส่วน ต้องสำรองทั้งคู่ในเวลาใกล้เคียงกัน: ฐานข้อมูล (volume `pgdata`) และไฟล์เอกสาร (volume `files`)
 
-## Learn More
+### สำรอง
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+mkdir -p backup
+# 1) ฐานข้อมูล
+docker compose exec -T postgres pg_dump -U esm -d esm -Fc > backup/esm-$(date +%F).dump
+# 2) ไฟล์เอกสาร
+docker run --rm -v esm-project_files:/data/files:ro -v "$PWD/backup":/backup alpine \
+  tar czf /backup/files-$(date +%F).tar.gz -C /data/files .
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+(ชื่อ volume คือ `esm-project_files` เพราะชื่อโปรเจกต์ Compose คือ `esm-project`; ตรวจด้วย `docker volume ls`)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### กู้คืน
 
-## Deploy on Vercel
+```bash
+docker compose up -d postgres
+# 1) ฐานข้อมูล (ลบข้อมูลเดิมในฐานข้อมูล esm แล้วใส่ข้อมูลจากไฟล์สำรอง)
+docker compose exec -T postgres pg_restore -U esm -d esm --clean --if-exists < backup/esm-YYYY-MM-DD.dump
+# 2) ไฟล์เอกสาร
+docker run --rm -v esm-project_files:/data/files -v "$PWD/backup":/backup alpine \
+  sh -c "cd /data/files && tar xzf /backup/files-YYYY-MM-DD.tar.gz && chown -R 1001:1001 /data/files"
+docker compose up -d
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## อัปเดตเป็นเวอร์ชันใหม่
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+# สำรองข้อมูลก่อนเสมอ (ดูหัวข้อด้านบน)
+git pull
+docker compose up -d --build
+```
+
+แอปจะรัน migration ฐานข้อมูลให้อัตโนมัติเมื่อเริ่ม ข้อมูลใน volume `pgdata` และ `files` ไม่หาย
+**ห้ามใช้ `docker compose down -v`** เพราะจะลบข้อมูลทั้งหมด (ใช้ `docker compose down` ได้)
+
+## สำหรับนักพัฒนา
+
+ต้องมี Node.js 22 และ Docker
+
+```bash
+npm ci
+cp .env.example .env     # แล้วแก้ DATABASE_URL เป็น postgresql://esm:esm@localhost:5432/esm และตั้ง POSTGRES_PASSWORD=esm
+docker compose up -d postgres   # PostgreSQL ที่ 127.0.0.1:5432 (มีฐานข้อมูล esm และ esm_test)
+npm run db:migrate
+SEED_ADMIN_PASSWORD=<รหัสผ่าน> npm run db:seed
+npm run dev
+```
+
+| คำสั่ง | ใช้ทำอะไร |
+|---|---|
+| `npm test` | Vitest (unit/integration) บนฐานข้อมูล `esm_test` |
+| `npm run test:e2e` | Playwright ทดสอบการใช้งานจริงผ่านเบราว์เซอร์ (รัน dev server ที่พอร์ต 3100 บนฐานข้อมูล `esm_test` และรีเซ็ตฐานข้อมูลนั้นทุกครั้ง) ติดตั้งเบราว์เซอร์ครั้งแรกด้วย `npx playwright install chromium` |
+| `npm run lint` | ESLint |
+| `npm run build` | Build production |
+
+### เครื่องที่สร้าง Docker network ใหม่ไม่ได้
+
+ถ้า Docker แจ้ง `all predefined address pools have been fully subnetted` ให้ใช้ไฟล์ override
+`docker-compose.local.yml` (ใช้ `network_mode: bridge` และให้แอปเชื่อมต่อฐานข้อมูลผ่าน `host.docker.internal`)
+**ใช้เฉพาะเครื่องพัฒนา ไม่ใช่เซิร์ฟเวอร์จริง**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build   # รวมแอป
+```

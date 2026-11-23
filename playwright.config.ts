@@ -1,0 +1,27 @@
+import { config as loadEnv } from "dotenv";
+import { defineConfig } from "@playwright/test";
+import { E2E_BASE_URL, E2E_PORT, E2E_STORAGE_DIR } from "./e2e/config";
+
+loadEnv({ quiet: true });
+
+export default defineConfig({
+  testDir: "./e2e",
+  testMatch: "**/*.spec.ts",
+  fullyParallel: false,
+  workers: 1,
+  reporter: "list",
+  globalSetup: "./e2e/global-setup.ts",
+  use: { baseURL: E2E_BASE_URL, trace: "retain-on-failure", locale: "th-TH" },
+  projects: [{ name: "chromium", use: { browserName: "chromium" } }],
+  webServer: {
+    command: `npx next dev -p ${E2E_PORT}`,
+    url: `${E2E_BASE_URL}/login`,
+    reuseExistingServer: false,
+    timeout: 120_000,
+    env: {
+      DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
+      FILE_STORAGE_DIR: E2E_STORAGE_DIR,
+      SESSION_COOKIE_SECURE: "false",
+    },
+  },
+});
