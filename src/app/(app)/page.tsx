@@ -1,17 +1,11 @@
 import Link from "next/link";
-import type { ProjectStatus } from "@prisma/client";
 import { requireUser } from "@/lib/auth/current-user";
 import { formatThaiDate } from "@/lib/dates";
+import { STATUS_LABEL } from "@/lib/labels";
 import { listVisibleProjects } from "@/features/projects/service";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const STATUS_LABEL: Record<ProjectStatus, string> = {
-  PLANNING: "วางแผน",
-  ACTIVE: "ดำเนินการ",
-  CLOSED: "ปิดโครงการ",
-};
 
 export default async function HomePage() {
   const user = await requireUser();
@@ -29,7 +23,8 @@ export default async function HomePage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((p) => (
-            <Card key={p.id}>
+            <Link key={p.id} href={`/projects/${p.code}`} className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Card className="transition-colors hover:bg-muted/50">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between gap-2">
                   <span>{p.code}</span>
@@ -45,6 +40,7 @@ export default async function HomePage() {
                 )}
               </CardContent>
             </Card>
+            </Link>
           ))}
         </div>
       )}

@@ -42,6 +42,7 @@ const updateFields = {
   name: z.string().trim().min(1, "กรุณากรอกชื่อโครงการ").optional(),
   shortName: z.string().trim().nullish().transform((v) => keep(v, (x) => x === "")),
   customerName: z.string().trim().nullish().transform((v) => keep(v, (x) => x === "")),
+  description: z.string().trim().nullish().transform((v) => keep(v, (x) => x === "")),
   startDate: z.date().nullish().transform((v) => keep(v)),
   endDate: z.date().nullish().transform((v) => keep(v)),
   budget: z.number().nonnegative("งบประมาณต้องไม่ติดลบ").nullish().transform((v) => keep(v)),

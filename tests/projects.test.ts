@@ -84,6 +84,18 @@ test("normalizeProjectCode trims and upper-cases", () => {
 });
 
 describe("updateProject", () => {
+  test("description can be set, kept and cleared", async () => {
+    const created = await createProject(admin, { code: "P-001", name: "Old", pmUserId: pm.id });
+    if (!created.ok) throw new Error("setup failed");
+    const id = created.data.id;
+    expect((await updateProject(pm, id, { description: "  รายละเอียด  " })).ok).toBe(true);
+    expect((await prisma.project.findUniqueOrThrow({ where: { id } })).description).toBe("รายละเอียด");
+    expect((await updateProject(pm, id, { name: "New" })).ok).toBe(true);
+    expect((await prisma.project.findUniqueOrThrow({ where: { id } })).description).toBe("รายละเอียด");
+    expect((await updateProject(pm, id, { description: "" })).ok).toBe(true);
+    expect((await prisma.project.findUniqueOrThrow({ where: { id } })).description).toBeNull();
+  });
+
   test("PM can edit, other members and outsiders cannot", async () => {
     const created = await createProject(admin, { code: "P-001", name: "Old", pmUserId: pm.id });
     if (!created.ok) throw new Error("setup failed");
