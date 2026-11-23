@@ -22,3 +22,9 @@ export function formatBaht(amount: number | string): string {
   const n = Number(amount);
   return `${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
 }
+
+export const ATTACHMENT_KIND_LABEL = {
+  SIGNED: "เอกสารลงนาม",
+  EVIDENCE: "หลักฐาน",
+  OTHER: "อื่น ๆ",
+} as const;
