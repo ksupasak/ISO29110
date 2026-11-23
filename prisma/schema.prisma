@@ -6,3 +6,151 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum SystemRole {
+  ADMIN
+  USER
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  CLOSED
+}
+
+enum ProjectRole {
+  PM
+  TL
+  AN
+  PR
+  QA
+  VIEWER
+}
+
+enum AttachmentKind {
+  EVIDENCE
+  SIGNED
+  OTHER
+}
+
+model User {
+  id           String            @id @default(cuid())
+  username     String            @unique
+  passwordHash String
+  fullName     String
+  position     String?
+  systemRole   SystemRole        @default(USER)
+  active       Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  memberships  ProjectMember[]
+  sessions     Session[]
+  uploads      Attachment[]
+  versions     DocumentVersion[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Project {
+  id              String          @id @default(cuid())
+  code            String          @unique
+  name            String
+  shortName       String?
+  customerName    String?
+  customerContact String?
+  type            String          @default("Internal")
+  startDate       DateTime?       @db.Date
+  endDate         DateTime?       @db.Date
+  budget          Decimal?        @db.Decimal(14, 2)
+  devCycle        String?
+  status          ProjectStatus   @default(PLANNING)
+  description     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  members         ProjectMember[]
+  wpDocuments     WpDocument[]
+  attachments     Attachment[]
+}
+
+model ProjectMember {
+  id          String        @id @default(cuid())
+  projectId   String
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  roles       ProjectRole[]
+  primaryRole ProjectRole
+  dailyRate   Decimal?      @db.Decimal(10, 2)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model WpDocument {
+  id             String            @id @default(cuid())
+  projectId      String
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wpCode         String
+  status         String            @default("Draft")
+  currentVersion String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  versions       DocumentVersion[]
+
+  @@unique([projectId, wpCode])
+}
+
+model DocumentVersion {
+  id           String     @id @default(cuid())
+  wpDocumentId String
+  wpDocument   WpDocument @relation(fields: [wpDocumentId], references: [id], onDelete: Cascade)
+  version      String
+  note         String?
+  attachmentId String     @unique
+  attachment   Attachment @relation(fields: [attachmentId], references: [id])
+  uploadedById String
+  uploadedBy   User       @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([wpDocumentId, version])
+}
+
+model Attachment {
+  id           String           @id @default(cuid())
+  projectId    String
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  entityType   String
+  entityId     String
+  kind         AttachmentKind   @default(OTHER)
+  fileName     String
+  storedPath   String
+  size         Int
+  mime         String
+  uploadedById String
+  uploadedBy   User             @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  version      DocumentVersion?
+
+  @@index([projectId, entityType, entityId])
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
