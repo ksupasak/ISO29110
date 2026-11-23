@@ -100,4 +100,56 @@ describe("updateProject", () => {
     expect(await updateProject(outsider, id, { name: "Z" })).toEqual(denied);
     expect((await updateProject(admin, id, { name: "Adm" })).ok).toBe(true);
   });
+
+  describe("partial updates", () => {
+    async function setup() {
+      const created = await createProject(admin, {
+        code: "P-009",
+        name: "Old",
+        shortName: "Short",
+        customerName: "Cust",
+        startDate: new Date("2026-01-10"),
+        endDate: new Date("2026-06-30"),
+        budget: 1234.5,
+        pmUserId: pm.id,
+      });
+      if (!created.ok) throw new Error("setup failed");
+      return created.data.id;
+    }
+    const load = (id: string) => prisma.project.findUniqueOrThrow({ where: { id } });
+
+    test("fields not sent are left untouched; null clears only that field", async () => {
+      const id = await setup();
+      expect((await updateProject(pm, id, { name: "New" })).ok).toBe(true);
+      const p = await load(id);
+      expect(p.name).toBe("New");
+      expect(p.shortName).toBe("Short");
+      expect(p.customerName).toBe("Cust");
+      expect(p.startDate).toEqual(new Date("2026-01-10"));
+      expect(p.endDate).toEqual(new Date("2026-06-30"));
+      expect(p.budget?.toString()).toBe("1234.5");
+
+      expect((await updateProject(pm, id, { customerName: null })).ok).toBe(true);
+      const q = await load(id);
+      expect(q.customerName).toBeNull();
+      expect(q).toMatchObject({ name: "New", shortName: "Short" });
+      expect(q.startDate).toEqual(new Date("2026-01-10"));
+      expect(q.budget?.toString()).toBe("1234.5");
+    });
+
+    test("empty string clears a text field", async () => {
+      const id = await setup();
+      expect((await updateProject(pm, id, { shortName: "  " })).ok).toBe(true);
+      expect((await load(id)).shortName).toBeNull();
+    });
+
+    test("date order is checked against stored values when only one date is sent", async () => {
+      const id = await setup();
+      const bad = { ok: false, error: "วันสิ้นสุดต้องไม่ก่อนวันเริ่ม" };
+      expect(await updateProject(pm, id, { endDate: new Date("2026-01-01") })).toEqual(bad);
+      expect(await updateProject(pm, id, { startDate: new Date("2026-12-01") })).toEqual(bad);
+      expect((await load(id)).endDate).toEqual(new Date("2026-06-30"));
+      expect((await updateProject(pm, id, { endDate: new Date("2026-07-01") })).ok).toBe(true);
+    });
+  });
 });

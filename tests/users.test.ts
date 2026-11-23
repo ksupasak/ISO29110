@@ -60,8 +60,10 @@ test("admin cannot deactivate themself", async () => {
 });
 
 test("admin can deactivate another user, who can then no longer log in", async () => {
+  await prisma.session.create({ data: { tokenHash: "t1", userId: plain.id, expiresAt: new Date(Date.now() + 60_000) } });
   expect((await setUserActive(admin, plain.id, false)).ok).toBe(true);
   expect(await authenticate("plain", "oldpass123")).toBeNull();
+  expect(await prisma.session.count({ where: { userId: plain.id } })).toBe(0);
 });
 
 test("resetPassword swaps the working password; short password rejected", async () => {

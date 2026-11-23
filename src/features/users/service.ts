@@ -92,7 +92,12 @@ export async function setUserActive(admin: User, id: string, active: boolean): P
   if (id === admin.id && !active) return fail("ไม่สามารถปิดบัญชีของตนเองได้");
   const existing = await prisma.user.findUnique({ where: { id }, select: { id: true } });
   if (!existing) return fail("ไม่พบผู้ใช้");
-  return ok(await prisma.user.update({ where: { id }, data: { active }, select: SUMMARY_SELECT }));
+  const [user] = await prisma.$transaction([
+    prisma.user.update({ where: { id }, data: { active }, select: SUMMARY_SELECT }),
+    // Deactivation takes effect immediately: drop any live sessions.
+    ...(active ? [] : [prisma.session.deleteMany({ where: { userId: id } })]),
+  ]);
+  return ok(user);
 }
 
 export async function resetPassword(admin: User, id: string, password: string): Promise<ActionResult<null>> {

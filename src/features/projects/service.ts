@@ -13,16 +13,19 @@ export function normalizeProjectCode(raw: string): string {
   return raw.trim().toUpperCase();
 }
 
-const optText = z
-  .string()
-  .trim()
-  .nullish()
-  .transform((v) => (v ? v : null));
-
-const fields = {
+/** Create-time fields: absent or empty means "no value" (null). */
+const createFields = {
   name: z.string().trim().min(1, "กรุณากรอกชื่อโครงการ"),
-  shortName: optText,
-  customerName: optText,
+  shortName: z
+    .string()
+    .trim()
+    .nullish()
+    .transform((v) => v || null),
+  customerName: z
+    .string()
+    .trim()
+    .nullish()
+    .transform((v) => v || null),
   startDate: z.date().nullish().transform((v) => v ?? null),
   endDate: z.date().nullish().transform((v) => v ?? null),
   budget: z
@@ -32,7 +35,19 @@ const fields = {
     .transform((v) => v ?? null),
 };
 
-const datesInOrder = (v: { startDate: Date | null; endDate: Date | null }) =>
+/** Update-time fields: undefined = leave unchanged; null or empty string = clear. */
+const keep = <T>(v: T | null | undefined, empty: (x: T) => boolean = () => false) =>
+  v === undefined ? undefined : v === null || empty(v) ? null : v;
+const updateFields = {
+  name: z.string().trim().min(1, "กรุณากรอกชื่อโครงการ").optional(),
+  shortName: z.string().trim().nullish().transform((v) => keep(v, (x) => x === "")),
+  customerName: z.string().trim().nullish().transform((v) => keep(v, (x) => x === "")),
+  startDate: z.date().nullish().transform((v) => keep(v)),
+  endDate: z.date().nullish().transform((v) => keep(v)),
+  budget: z.number().nonnegative("งบประมาณต้องไม่ติดลบ").nullish().transform((v) => keep(v)),
+};
+
+const datesInOrder = (v: { startDate?: Date | null; endDate?: Date | null }) =>
   !v.startDate || !v.endDate || v.endDate >= v.startDate;
 
 const createSchema = z
@@ -42,13 +57,11 @@ const createSchema = z
       .transform(normalizeProjectCode)
       .pipe(z.string().regex(/^[A-Z0-9][A-Z0-9-]{2,29}$/, "รหัสโครงการต้องยาว 3-30 ตัวอักษร ใช้ได้เฉพาะ A-Z 0-9 และ -")),
     pmUserId: z.string().min(1, "กรุณาเลือกผู้จัดการโครงการ"),
-    ...fields,
+    ...createFields,
   })
   .refine(datesInOrder, { message: DATE_ORDER });
 
-const updateSchema = z
-  .object({ ...fields, status: z.enum(["PLANNING", "ACTIVE", "CLOSED"]).optional() })
-  .refine(datesInOrder, { message: DATE_ORDER });
+const updateSchema = z.object({ ...updateFields, status: z.enum(["PLANNING", "ACTIVE", "CLOSED"]).optional() });
 
 export type CreateProjectInput = z.input<typeof createSchema>;
 export type UpdateProjectInput = z.input<typeof updateSchema>;
@@ -91,6 +104,14 @@ export async function updateProject(
   if (!can(actor, "project.edit")) return fail(FORBIDDEN);
   const parsed = parseInput(updateSchema, input);
   if (!parsed.ok) return parsed;
+  const stored = await prisma.project.findUnique({ where: { id: projectId }, select: { startDate: true, endDate: true } });
+  if (!stored) return fail("ไม่พบโครงการ");
+  // The date-order rule applies to the resulting values, not just the ones sent.
+  const merged = {
+    startDate: parsed.data.startDate === undefined ? stored.startDate : parsed.data.startDate,
+    endDate: parsed.data.endDate === undefined ? stored.endDate : parsed.data.endDate,
+  };
+  if (!datesInOrder(merged)) return fail(DATE_ORDER);
   return ok(await prisma.project.update({ where: { id: projectId }, data: parsed.data }));
 }
 
