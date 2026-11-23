@@ -102,6 +102,12 @@ body {
   border-radius: 50%;
 }
 
+.btn-icon-danger {
+  --bs-btn-hover-color: #{$danger};
+  --bs-btn-hover-bg: #{rgba($danger, .08)};
+  --bs-btn-active-bg: #{rgba($danger, .14)};
+}
+
 // Fields: floating labels are the default style
 .form-floating > .form-control:focus ~ label,
 .form-floating > .form-select:focus ~ label {
@@ -110,6 +116,21 @@ body {
 
 .form-floating > label {
   color: $gray-700;
+}
+
+// Browsers draw a date mask in empty date inputs, so the label must always sit above it.
+.form-floating > input[type="date"] {
+  padding-top: 1.625rem;
+  padding-bottom: .625rem;
+}
+
+.form-floating > input[type="date"] ~ label {
+  transform: scale(.85) translateY(-.5rem) translateX(.15rem);
+  opacity: .65;
+}
+
+.form-floating > textarea.form-control-textarea {
+  height: 7rem;
 }
 
 // Dense tables inside cards
@@ -225,4 +246,76 @@ body {
   border-radius: 50%;
 
   .material-symbols-outlined { font-size: 2rem; }
+}
+
+// Summary tiles on the home page
+.stat-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.stat-card-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: $border-radius;
+
+  .material-symbols-outlined { font-size: 1.625rem; }
+}
+
+.stat-card-icon-primary {
+  color: $primary;
+  background-color: rgba($primary, .08);
+}
+
+.stat-card-icon-success {
+  color: shade-color($success, 25%);
+  background-color: rgba($success, .12);
+}
+
+.stat-card-icon-muted {
+  color: $gray-700;
+  background-color: $gray-200;
+}
+
+.stat-card-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.stat-card-label {
+  font-size: .875rem;
+  color: $gray-600;
+}
+
+// Link cards (project list)
+.link-card {
+  color: inherit;
+  text-decoration: none;
+  transition: box-shadow .2s ease-in-out, transform .2s ease-in-out;
+
+  &:hover {
+    color: inherit;
+    box-shadow: $elevation-3;
+    transform: translateY(-2px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $primary;
+    outline-offset: 2px;
+  }
+}
+
+.link-card-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }

@@ -1,95 +1,36 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   createUserAction,
   resetPasswordAction,
   setUserActiveAction,
   updateUserAction,
-  type UserFormState,
 } from "@/features/users/actions";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FormDialog } from "@/components/form-dialog";
+import { FloatingField, FloatingSelect } from "@/components/form-fields";
+import { IconButton } from "@/components/icon-button";
 
 type UserRow = { id: string; username: string; fullName: string; position: string | null; systemRole: "ADMIN" | "USER" };
 
-const initial: UserFormState = {};
-
-function Field({ id, label, ...props }: { id: string; label: string } & React.ComponentProps<"input">) {
-  return (
-    <div className="space-y-1">
-      <Label htmlFor={id}>{label}</Label>
-      <Input id={id} name={id} {...props} />
-    </div>
-  );
-}
-
 function RoleSelect({ defaultValue }: { defaultValue: "ADMIN" | "USER" }) {
   return (
-    <div className="space-y-1">
-      <Label htmlFor="systemRole">สิทธิ์ระบบ</Label>
-      <select
-        key={defaultValue}
-        id="systemRole"
-        name="systemRole"
-        defaultValue={defaultValue}
-        className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-      >
-        <option value="USER">ผู้ใช้ทั่วไป</option>
-        <option value="ADMIN">ผู้ดูแลระบบ</option>
-      </select>
-    </div>
-  );
-}
-
-/** Dialog that submits a server action and closes itself on success. */
-function FormDialog({
-  title,
-  trigger,
-  action,
-  submitLabel,
-  children,
-}: {
-  title: string;
-  trigger: string;
-  action: (prev: UserFormState, formData: FormData) => Promise<UserFormState>;
-  submitLabel: string;
-  children: (values: Record<string, string>) => React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const [state, formAction, pending] = useActionState(async (prev: UserFormState, fd: FormData) => {
-    const next = await action(prev, fd);
-    if (next.ok) setOpen(false);
-    return next;
-  }, initial);
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>{trigger}</DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <form action={formAction} className="space-y-3">
-          {children(state.values ?? {})}
-          {state.error && <p role="alert" className="text-sm text-destructive">{state.error}</p>}
-          <Button type="submit" disabled={pending}>{submitLabel}</Button>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <FloatingSelect key={defaultValue} id="systemRole" label="สิทธิ์ระบบ" defaultValue={defaultValue}>
+      <option value="USER">ผู้ใช้ทั่วไป</option>
+      <option value="ADMIN">ผู้ดูแลระบบ</option>
+    </FloatingSelect>
   );
 }
 
 export function CreateUserDialog() {
   return (
-    <FormDialog title="เพิ่มผู้ใช้งาน" trigger="เพิ่มผู้ใช้งาน" action={createUserAction} submitLabel="บันทึก">
+    <FormDialog title="เพิ่มผู้ใช้งาน" trigger="เพิ่มผู้ใช้งาน" action={createUserAction} submitLabel="บันทึก" triggerIcon="person_add" triggerVariant="primary">
       {(v) => (
         <>
-          <Field id="username" label="ชื่อผู้ใช้" required autoComplete="off" defaultValue={v.username} />
-          <Field id="fullName" label="ชื่อ-นามสกุล" required defaultValue={v.fullName} />
-          <Field id="position" label="ตำแหน่ง" defaultValue={v.position} />
-          <Field id="password" label="รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)" type="password" required autoComplete="new-password" />
+          <FloatingField id="username" label="ชื่อผู้ใช้" required autoComplete="off" defaultValue={v.username} />
+          <FloatingField id="fullName" label="ชื่อ-นามสกุล" required defaultValue={v.fullName} />
+          <FloatingField id="position" label="ตำแหน่ง" defaultValue={v.position} />
+          <FloatingField id="password" label="รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)" type="password" required autoComplete="new-password" />
           <RoleSelect defaultValue={v.systemRole === "ADMIN" ? "ADMIN" : "USER"} />
         </>
       )}
@@ -99,12 +40,12 @@ export function CreateUserDialog() {
 
 export function EditUserDialog({ user }: { user: UserRow }) {
   return (
-    <FormDialog title={`แก้ไข ${user.username}`} trigger="แก้ไข" action={updateUserAction} submitLabel="บันทึก">
+    <FormDialog title={`แก้ไข ${user.username}`} trigger="แก้ไข" action={updateUserAction} submitLabel="บันทึก" triggerIcon="edit" iconOnly>
       {(v) => (
         <>
           <input type="hidden" name="id" value={user.id} />
-          <Field id="fullName" label="ชื่อ-นามสกุล" required defaultValue={v.fullName ?? user.fullName} />
-          <Field id="position" label="ตำแหน่ง" defaultValue={v.position ?? user.position ?? ""} />
+          <FloatingField id="fullName" label="ชื่อ-นามสกุล" required defaultValue={v.fullName ?? user.fullName} />
+          <FloatingField id="position" label="ตำแหน่ง" defaultValue={v.position ?? user.position ?? ""} />
           <RoleSelect defaultValue={(v.systemRole ?? user.systemRole) === "ADMIN" ? "ADMIN" : "USER"} />
         </>
       )}
@@ -119,11 +60,13 @@ export function ResetPasswordDialog({ userId, username }: { userId: string; user
       trigger="รีเซ็ตรหัสผ่าน"
       action={resetPasswordAction}
       submitLabel="รีเซ็ต"
+      triggerIcon="lock_reset"
+      iconOnly
     >
       {() => (
         <>
           <input type="hidden" name="id" value={userId} />
-          <Field id="password" label="รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)" type="password" required autoComplete="new-password" />
+          <FloatingField id="password" label="รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)" type="password" required autoComplete="new-password" />
         </>
       )}
     </FormDialog>
@@ -135,9 +78,9 @@ export function ActiveToggle({ userId, active, isSelf }: { userId: string; activ
   const [error, setError] = useState<string | null>(null);
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
+      <IconButton
+        icon={active ? "block" : "check_circle"}
+        label={active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
         disabled={pending || (isSelf && active)}
         onClick={() =>
           startTransition(async () => {
@@ -145,10 +88,8 @@ export function ActiveToggle({ userId, active, isSelf }: { userId: string; activ
             setError(r.error ?? null);
           })
         }
-      >
-        {active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
-      </Button>
-      {error && <span role="alert" className="text-xs text-destructive">{error}</span>}
+      />
+      {error && <span role="alert" className="text-danger small">{error}</span>}
     </>
   );
 }

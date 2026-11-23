@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/db";
+import { PageHeader } from "@/components/page-header";
 import { NewProjectForm } from "./new-project-form";
 
 export default async function NewProjectPage() {
@@ -10,9 +11,13 @@ export default async function NewProjectPage() {
     orderBy: { fullName: "asc" },
   });
   return (
-    <div className="mx-auto max-w-xl space-y-4">
-      <h1 className="text-xl font-semibold">สร้างโครงการ</h1>
-      <NewProjectForm users={users} />
-    </div>
+    <>
+      <PageHeader title="สร้างโครงการ" />
+      <div className="row">
+        <div className="col-12 col-xl-9 col-xxl-7">
+          <NewProjectForm users={users} />
+        </div>
+      </div>
+    </>
   );
 }

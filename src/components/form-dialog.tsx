@@ -3,6 +3,8 @@
 import { useActionState, useId, useState } from "react";
 import Button from "react-bootstrap/Button";
 import Modal from "react-bootstrap/Modal";
+import { Icon } from "@/components/icon";
+import { IconButton } from "@/components/icon-button";
 
 type State = { error?: string; ok?: boolean; values?: Record<string, string> };
 type Action = (prev: State, formData: FormData) => Promise<State>;
@@ -14,30 +16,40 @@ export function FormDialog({
   trigger,
   action,
   submitLabel = "บันทึก",
+  triggerIcon,
+  triggerVariant = "outline-primary",
+  iconOnly = false,
   children,
 }: {
   title: string;
   trigger: string;
   action: Action;
   submitLabel?: string;
+  /** Material Symbols name shown in the trigger button. */
+  triggerIcon?: string;
+  triggerVariant?: "outline-primary" | "primary";
+  /** Row-action style: show only `triggerIcon`, keeping `trigger` as accessible name and tooltip. Needs `triggerIcon`. */
+  iconOnly?: boolean;
   children: Fields;
 }) {
   const [open, setOpen] = useState(false);
   // Every opening mounts a fresh form, so an error or echoed values from a cancelled attempt never reappear.
   const [session, setSession] = useState(0);
   const titleId = useId();
+  const openDialog = () => {
+    setSession((n) => n + 1);
+    setOpen(true);
+  };
   return (
     <>
-      <Button
-        variant="outline-primary"
-        size="sm"
-        onClick={() => {
-          setSession((n) => n + 1);
-          setOpen(true);
-        }}
-      >
-        {trigger}
-      </Button>
+      {iconOnly && triggerIcon ? (
+        <IconButton icon={triggerIcon} label={trigger} onClick={openDialog} />
+      ) : (
+        <Button variant={triggerVariant} size={triggerVariant === "primary" ? undefined : "sm"} onClick={openDialog}>
+          {triggerIcon && <Icon name={triggerIcon} />}
+          {trigger}
+        </Button>
+      )}
       <Modal show={open} onHide={() => setOpen(false)} centered aria-labelledby={titleId}>
         <Modal.Header closeButton>
           <Modal.Title id={titleId} as="h2" className="h5">{title}</Modal.Title>

@@ -1,7 +1,8 @@
 import type { ProjectRole, ProjectStatus } from "@prisma/client";
 import { ROLE_LABEL, STATUS_LABEL, docStatusVariant, projectStatusVariant } from "@/lib/labels";
 
-function StatusChip({ variant, children }: { variant: string; children: React.ReactNode }) {
+/** Soft-tinted pill; `variant` is a Bootstrap colour name (or `primary`). */
+export function StatusChip({ variant, children }: { variant: string; children: React.ReactNode }) {
   return <span className={`badge-status badge-status-${variant}`}>{children}</span>;
 }
 
