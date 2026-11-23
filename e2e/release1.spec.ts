@@ -1,6 +1,6 @@
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { E2E_ADMIN_PASSWORD, E2E_ADMIN_USERNAME } from "./config";
+import { E2E_ADMIN_PASSWORD, E2E_ADMIN_USERNAME, E2E_BASE_URL } from "./config";
 
 const PM_USERNAME = "pm1";
 const PM_PASSWORD = "pm1-Password-1";
@@ -24,11 +24,35 @@ async function logout(page: Page, fullName: string) {
 }
 
 test("Release 1: admin sets up a project, PM uploads and reviews a WP document", async ({ page }) => {
+  // Offline guarantee: every request of the scenario stays on the app's own origin (fonts, icons and CSS are bundled).
+  const appOrigin = new URL(E2E_BASE_URL).origin;
+  const external: string[] = [];
+  page.context().on("request", (request) => {
+    const url = request.url();
+    if (url.startsWith("data:") || url.startsWith("blob:")) return;
+    if (new URL(url).origin !== appOrigin) external.push(url);
+  });
+
   // 1. admin creates user pm1 and project INT-2569-001
   await login(page, E2E_ADMIN_USERNAME, E2E_ADMIN_PASSWORD);
   await page.getByRole("link", { name: "ผู้ใช้งาน" }).click();
   await page.getByRole("button", { name: "เพิ่มผู้ใช้งาน" }).click();
   const userDialog = page.getByRole("dialog");
+
+  // dialog: a duplicate username keeps the typed values and shows the error; cancelling and reopening starts clean
+  await userDialog.getByLabel("ชื่อผู้ใช้", { exact: true }).fill(E2E_ADMIN_USERNAME);
+  await userDialog.getByLabel("ชื่อ-นามสกุล").fill(PM_NAME);
+  await userDialog.getByLabel("รหัสผ่าน", { exact: false }).fill(PM_PASSWORD);
+  await userDialog.getByRole("button", { name: "บันทึก" }).click();
+  await expect(userDialog.getByRole("alert")).toHaveText("ชื่อผู้ใช้นี้ถูกใช้แล้ว");
+  await expect(userDialog.getByLabel("ชื่อ-นามสกุล")).toHaveValue(PM_NAME);
+  await userDialog.getByRole("button", { name: "Close" }).click();
+  await expect(userDialog).toBeHidden();
+  await page.getByRole("button", { name: "เพิ่มผู้ใช้งาน" }).click();
+  await expect(userDialog.getByLabel("ชื่อผู้ใช้", { exact: true })).toHaveValue("");
+  await expect(userDialog.getByLabel("ชื่อ-นามสกุล")).toHaveValue("");
+  await expect(userDialog.getByRole("alert")).toHaveCount(0);
+
   await userDialog.getByLabel("ชื่อผู้ใช้", { exact: true }).fill(PM_USERNAME);
   await userDialog.getByLabel("ชื่อ-นามสกุล").fill(PM_NAME);
   await userDialog.getByLabel("รหัสผ่าน", { exact: false }).fill(PM_PASSWORD);
@@ -79,8 +103,26 @@ test("Release 1: admin sets up a project, PM uploads and reviews a WP document",
   ]);
   expect(download.suggestedFilename()).toBe("แผนโครงการ.docx");
 
-  // 5. after logout the project is no longer reachable
+  // 5. mobile: the sidebar is replaced by a menu button that opens a closing offcanvas menu
+  await page.goto(`/projects/${PROJECT_CODE}`);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const sidebarDocs = page.getByRole("navigation", { name: "เมนูหลัก" }).getByRole("link", { name: "เอกสาร" });
+  await expect(sidebarDocs).toBeHidden();
+  const menuButton = page.getByRole("button", { name: "เปิดเมนู" });
+  await expect(menuButton).toHaveAttribute("aria-expanded", "false");
+  await menuButton.click();
+  await expect(menuButton).toHaveAttribute("aria-expanded", "true");
+  await page.getByRole("link", { name: "เอกสาร" }).click();
+  await expect(page).toHaveURL(/\/documents$/);
+  await expect(page.locator(".app-offcanvas")).toBeHidden();
+  await expect(menuButton).toHaveAttribute("aria-expanded", "false");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 720 });
+
+  // 6. after logout the project is no longer reachable
   await logout(page, PM_NAME);
   await page.goto(`/projects/${PROJECT_CODE}`);
   await expect(page).toHaveURL(/\/login$/);
+
+  expect(external).toEqual([]);
 });

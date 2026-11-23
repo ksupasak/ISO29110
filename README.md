@@ -141,8 +141,18 @@ npm run dev
 |---|---|
 | `npm test` | Vitest (unit/integration) บนฐานข้อมูล `esm_test` |
 | `npm run test:e2e` | Playwright ทดสอบการใช้งานจริงผ่านเบราว์เซอร์ (รัน dev server ที่พอร์ต 3100 บนฐานข้อมูล `esm_test` และรีเซ็ตฐานข้อมูลนั้นทุกครั้ง) ติดตั้งเบราว์เซอร์ครั้งแรกด้วย `npx playwright install chromium` |
+| `npm run screens` | Playwright เก็บภาพหน้าจอ (login, หน้าแรก, ผู้ใช้งาน, ภาพรวมโครงการ, เอกสาร, dialog; เดสก์ท็อป 1440×900 และมือถือ 390×844) ลง `docs/screenshots/ui-v2/` บนฐานข้อมูล `esm_test` ไม่รวมอยู่ใน `npm run test:e2e` |
 | `npm run lint` | ESLint |
 | `npm run build` | Build production |
+
+### ธีมและสี (Bootstrap)
+
+UI ใช้ Bootstrap 5.3 + react-bootstrap พร้อมธีมสไตล์ Material อยู่ที่ `src/styles/`:
+`_variables.scss` (ตัวแปร Bootstrap), `_material.scss` (การ์ด ปุ่ม ฟอร์ม ตาราง ชิปสถานะ), `_shell.scss` (แถบด้านข้าง/แถบบน), `app.scss` (จุดรวม)
+ฟอนต์ Sarabun (`@fontsource/sarabun`) และไอคอน Material Symbols (`material-symbols`) ถูกบันทึกในแพ็กเกจ ไม่เรียกทรัพยากรภายนอก
+
+เปลี่ยนสี: แก้ค่า `$primary`, `$secondary`, `$success`, `$warning`, `$danger`, `$info` และ `$body-bg` ใน `src/styles/_variables.scss`
+(สีอื่นในธีมคำนวณจากค่าเหล่านี้) แล้วรัน `npm run screens` เพื่อตรวจหน้าตาทุกหน้า
 
 ### เครื่องที่สร้าง Docker network ใหม่ไม่ได้
 

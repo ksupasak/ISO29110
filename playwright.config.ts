@@ -4,9 +4,12 @@ import { E2E_BASE_URL, E2E_PORT, E2E_STORAGE_DIR } from "./e2e/config";
 
 loadEnv({ quiet: true });
 
+// `npm run screens` (E2E_SCREENS=1) runs only the screenshot capture; `npm run test:e2e` never does.
+const screens = process.env.E2E_SCREENS === "1";
+
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "**/*.spec.ts",
+  testMatch: screens ? "**/screens.spec.ts" : "**/release1.spec.ts",
   fullyParallel: false,
   workers: 1,
   reporter: "list",

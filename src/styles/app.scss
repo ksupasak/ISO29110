@@ -10,14 +10,8 @@
 @import "bootstrap/scss/mixins";
 @import "bootstrap/scss/utilities";
 
-// While pages not yet migrated still use Tailwind (loaded after this file), Bootstrap's CSS sits in a cascade
-// layer after Tailwind's preflight and before its utilities: Bootstrap overrides preflight, Tailwind classes
-// keep working on the old pages. The Material layer below is unlayered and wins over both.
-@layer theme, base, bootstrap, components, utilities;
-
-@layer bootstrap {
-  @import "bootstrap/scss/bootstrap";
-}
+// Bootstrap's CSS, then the project's Material theme and app shell on top (later rules win at equal specificity).
+@import "bootstrap/scss/bootstrap";
 
 @import "material";
 @import "shell";

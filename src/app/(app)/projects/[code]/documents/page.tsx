@@ -43,12 +43,11 @@ export default async function DocumentsPage({ params }: PageProps<"/projects/[co
             const options = ["Draft", ...item.wp.states].filter(
               (s) => s === item.status || canBaseline || !isFinalStatus(s),
             );
-            const toggleLabel =
-              item.versions.length > 0
-                ? `ประวัติเวอร์ชัน (${item.versions.length})`
-                : item.attachments.length > 0
-                  ? `ไฟล์แนบ (${item.attachments.length})`
-                  : null;
+            const toggleParts = [
+              item.versions.length > 0 ? `ประวัติเวอร์ชัน (${item.versions.length})` : null,
+              item.attachments.length > 0 ? `ไฟล์แนบ (${item.attachments.length})` : null,
+            ].filter((part): part is string => part !== null);
+            const toggleLabel = toggleParts.length > 0 ? toggleParts.join(" · ") : null;
             return (
               <WpRow
                 key={item.id}

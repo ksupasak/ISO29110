@@ -10,14 +10,6 @@ const nextConfig: NextConfig = {
     quietDeps: true,
     silenceDeprecations: ["import", "global-builtin", "color-functions", "if-function"],
   },
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
-  },
 };
 
 export default nextConfig;
