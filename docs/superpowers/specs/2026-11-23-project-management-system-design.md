@@ -198,3 +198,37 @@
 - วิธีแสดง WBS (ต้นไม้พับได้หรือตารางเยื้อง)
 - โครงสร้างโฟลเดอร์เก็บไฟล์บน disk
 - ข้อมูลตั้งต้น (seed): โครงการตัวอย่าง TaskDoc จาก `data.js` สำหรับ dev/ทดสอบเท่านั้น
+
+## 8. ส่วนเพิ่มเติม 23/11/2569 — สายการอ้างอิงและลำดับรุ่นใหม่ (ผู้ใช้อนุมัติ)
+
+ผู้ใช้ต้องการให้เอกสารที่เกิดซ้ำได้หลายครั้ง (เช่น Meeting Record) กรอกผ่านฟอร์มครบทุกช่อง ออกรหัสอัตโนมัติ และไล่ตามรอยได้ตั้งแต่ Requirement → Dev task → ผลทดสอบ
+
+### 8.1 สายการอ้างอิง
+
+```
+AG-nn (agreement_item)
+  └─ REQ-xnn (requirement)
+       ├─ T-nnn (task ชนิด dev)  ── many-to-many: task_requirement
+       │    └─ Cnn (component)   ── many-to-many: task_component
+       ├─ TC-nn (test_case)      ── test_case_requirement (เดิม)
+       │    └─ test_result → DEF-nn (defect) → T-nnn (task แก้ไข: task.defect_id)
+       └─ CR (change_request)    ── requirement.added_by_cr / cr_affected_item (เดิม)
+
+MR (meeting) → meeting_item (OpenIssue/Agreement) → สร้างหรืออ้าง task, correction, change_request
+```
+
+- เพิ่มตาราง `task_requirement` และ `task_component`; เพิ่ม `task.code` (`T-nnn` นับต่อโครงการ), `task.kind` (Plan/Dev/Fix/Review), `task.defect_id`, `meeting_item.linked_type` + `linked_id`
+- `requirement_component` (เดิม) คงไว้สำหรับการโยงตรง แต่ Traceability คำนวณจากทั้งสองทาง (ผ่าน task และโยงตรง)
+- ทุกหน้ารายละเอียดมีแผง "การอ้างอิง" แสดงรายการต้นทางและปลายทาง; Traceability Record ที่ส่งออกมีคอลัมน์ Task เพิ่ม
+
+### 8.2 ลำดับรุ่นใหม่ (แทนตารางในข้อ 6.7 ตั้งแต่รุ่น 2)
+
+| รุ่น | เนื้อหา |
+|---|---|
+| 1 | เสร็จแล้ว (ฐานระบบ + คลังเอกสาร) |
+| 1.5 | เปลี่ยนหน้าตาเป็น Bootstrap 5 + Material (เอกสารแยก: 2026-11-23-material-bootstrap-ui-design.md) |
+| 2 | Milestone, WBS/Task, Requirement, Component, agreement_item, การโยง AG→REQ→Task→Component, Meeting Record แบบฟอร์มเต็ม + ส่งออก docx (ต้นแบบของทะเบียนที่เกิดซ้ำ), ผู้ใช้เปลี่ยนรหัสผ่านเอง |
+| 3 | Change Request, Correction, Progress Status (+ risk, budget) + ส่งออก |
+| 4 | Verification, Validation + ส่งออก |
+| 5 | Test Case, Test Run, Defect, Traceability Record + ส่งออก |
+| 6 | ส่งออกทั้งชุด, การล็อก, audit log, backup log |
