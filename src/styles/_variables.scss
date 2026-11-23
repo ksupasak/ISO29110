@@ -31,6 +31,9 @@ $kbd-color: $surface;
 // Material buttons keep white text on the mid-tone success/info fills.
 $min-contrast-ratio: 3;
 
+// The theme is light only.
+$enable-dark-mode: false;
+
 // Next.js warns about smooth scrolling on <html> (route transitions); keep the browser default.
 $enable-smooth-scroll: false;
 
@@ -39,6 +42,7 @@ $font-family-sans-serif: "Sarabun", system-ui, sans-serif;
 $font-size-base: 0.9375rem;
 $line-height-base: 1.6;
 $headings-font-weight: 600;
+$headings-line-height: 1.4;
 $font-weight-semibold: 600;
 $link-color: $primary;
 $link-decoration: none;

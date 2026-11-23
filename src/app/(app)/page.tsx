@@ -56,7 +56,7 @@ export default async function HomePage() {
               <Link href={`/projects/${p.code}`} className="card link-card h-100">
                 <div className="card-body d-flex flex-column gap-2">
                   <div className="d-flex align-items-center justify-content-between gap-2">
-                    <span className="fw-semibold text-secondary">{p.code}</span>
+                    <span className="fw-semibold text-primary">{p.code}</span>
                     <ProjectStatusBadge status={p.status} />
                   </div>
                   <h2 className="h6 mb-0 link-card-title">{p.name}</h2>

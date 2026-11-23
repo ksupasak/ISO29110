@@ -51,10 +51,10 @@ export function FormDialog({
         </Button>
       )}
       <Modal show={open} onHide={() => setOpen(false)} centered aria-labelledby={titleId}>
-        <Modal.Header closeButton>
+        <Modal.Header closeButton closeLabel="ปิด">
           <Modal.Title id={titleId} as="h2" className="h5">{title}</Modal.Title>
         </Modal.Header>
-        <DialogForm key={session} action={action} submitLabel={submitLabel} onSuccess={() => setOpen(false)}>
+        <DialogForm key={session} action={action} submitLabel={submitLabel} onSuccess={() => setOpen(false)} onCancel={() => setOpen(false)}>
           {children}
         </DialogForm>
       </Modal>
@@ -66,11 +66,13 @@ function DialogForm({
   action,
   submitLabel,
   onSuccess,
+  onCancel,
   children,
 }: {
   action: Action;
   submitLabel: string;
   onSuccess: () => void;
+  onCancel: () => void;
   children: Fields;
 }) {
   const [state, formAction, pending] = useActionState(async (prev: State, fd: FormData) => {
@@ -82,9 +84,10 @@ function DialogForm({
     <form action={formAction}>
       <Modal.Body className="d-grid gap-3">
         {children(state.values ?? {})}
-        {state.error && <p role="alert" className="text-danger small mb-0">{state.error}</p>}
+        {state.error && <div role="alert" className="alert alert-danger py-2 small mb-3">{state.error}</div>}
       </Modal.Body>
       <Modal.Footer>
+        <Button type="button" variant="link" onClick={onCancel}>ยกเลิก</Button>
         <Button type="submit" variant="primary" disabled={pending}>{submitLabel}</Button>
       </Modal.Footer>
     </form>

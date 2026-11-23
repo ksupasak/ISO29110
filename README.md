@@ -154,6 +154,14 @@ UI ใช้ Bootstrap 5.3 + react-bootstrap พร้อมธีมสไต�
 เปลี่ยนสี: แก้ค่า `$primary`, `$secondary`, `$success`, `$warning`, `$danger`, `$info` และ `$body-bg` ใน `src/styles/_variables.scss`
 (สีอื่นในธีมคำนวณจากค่าเหล่านี้) แล้วรัน `npm run screens` เพื่อตรวจหน้าตาทุกหน้า
 
+### แนวทาง UI
+
+- ฟอร์มใน dialog: ใช้ `FormDialog` + `form-fields` (`FloatingField`, `FloatingSelect`, `FloatingTextarea`, `FileField`) ได้ label แบบลอย ข้อความผิดพลาดสไตล์เดียว (`alert alert-danger`) และปุ่ม `ยกเลิก` + ปุ่มบันทึก
+- หน้าจอ: ใช้ `AppCard` + `PageHeader` เป็นโครงของทุกหน้า
+- ตาราง: ใช้รูปแบบตามขนาดจอเดียวกัน คือครอบด้วย `table-responsive`, ใส่ `table-actions` ที่คอลัมน์ปุ่มจัดการ (ติดขอบขวาเมื่อเลื่อนตาราง), ซ่อนคอลัมน์รองด้วย `d-none d-md-table-cell` และใส่ `text-nowrap` ที่เซลล์ชื่อ
+- ปุ่มในแถว: ใช้ `IconButton` พร้อม `aria-label`/`title` (ผ่าน prop `label`)
+- สีสถานะ: ใช้ `docStatusVariant` / `projectStatusVariant` กับ `StatusChip` (หรือ `DocStatusBadge`/`ProjectStatusBadge`) แทนการกำหนดสีเอง
+
 ### เครื่องที่สร้าง Docker network ใหม่ไม่ได้
 
 ถ้า Docker แจ้ง `all predefined address pools have been fully subnetted` ให้ใช้ไฟล์ override

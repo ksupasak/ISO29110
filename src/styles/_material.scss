@@ -141,6 +141,11 @@ body {
 
   > :not(caption) > * > * {
     padding: .5rem 1.25rem;
+
+    @include media-breakpoint-down(md) {
+      padding-right: .5rem;
+      padding-left: .5rem;
+    }
   }
 
   > thead th {
@@ -442,4 +447,43 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;
+}
+
+// Responsive table pattern. Wrap in `.table-responsive`; give the actions <th>/<td> `.table-actions` so they stay in
+// view when the table scrolls sideways; hide low-priority columns below md with `d-none d-md-table-cell`; keep name
+// cells on one line with `text-nowrap`.
+// Selectors out-rank Bootstrap's `.table > :not(caption) > * > *` cell background.
+.table > :not(caption) > * > .table-actions {
+  position: sticky;
+  right: 0;
+  white-space: nowrap;
+  background-color: $table-bg;
+
+  @include media-breakpoint-down(md) {
+    box-shadow: -.5rem 0 .5rem -.5rem rgba($primary, .25);
+
+    // Three row actions plus name and status must fit a 360 px card.
+    .btn-icon {
+      width: 2.125rem;
+      height: 2.125rem;
+    }
+  }
+}
+
+// Row hover tint, painted opaque because the sticky cell must hide what scrolls beneath it.
+.table-hover > tbody > tr:hover > .table-actions {
+  background-color: mix($body-color, $table-bg, 7.5%);
+}
+
+.card .table > thead > tr > .table-actions,
+.table-dense > thead > tr > .table-actions {
+  background-color: $gray-100;
+}
+
+// Inline error under a row's action buttons: wraps in its own block so it cannot widen the table.
+.row-error {
+  max-width: 12rem;
+  margin-left: auto;
+  white-space: normal;
+  text-align: end;
 }

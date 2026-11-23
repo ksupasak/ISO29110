@@ -2,15 +2,8 @@
 // Fonts (Sarabun) and icons (Material Symbols Outlined) are imported from npm in src/app/layout.tsx.
 @import "variables";
 
-// Bootstrap's Sass API (no CSS output) for the Material and shell partials below.
-@import "bootstrap/scss/functions";
-@import "bootstrap/scss/variables";
-@import "bootstrap/scss/variables-dark";
-@import "bootstrap/scss/maps";
-@import "bootstrap/scss/mixins";
-@import "bootstrap/scss/utilities";
-
-// Bootstrap's CSS, then the project's Material theme and app shell on top (later rules win at equal specificity).
+// Bootstrap (its Sass API stays available to the partials below), then the project's Material theme and app shell on top
+// (later rules win at equal specificity).
 @import "bootstrap/scss/bootstrap";
 
 @import "material";

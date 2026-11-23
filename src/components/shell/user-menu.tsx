@@ -14,7 +14,7 @@ export function UserMenu({ fullName }: { fullName: string }) {
         <span className="user-menu-name">{fullName}</span>
         <Icon name="expand_more" />
       </Dropdown.Toggle>
-      <Dropdown.Menu>
+      <Dropdown.Menu role="menu">
         <Dropdown.Item as="button" role="menuitem" disabled={pending} onClick={() => startTransition(() => logoutAction())}>
           <Icon name="logout" className="me-2" />
           ออกจากระบบ

@@ -21,23 +21,23 @@ export default async function UsersPage() {
               <tr>
                 <th scope="col">ชื่อผู้ใช้</th>
                 <th scope="col">ชื่อ-นามสกุล</th>
-                <th scope="col">ตำแหน่ง</th>
-                <th scope="col">สิทธิ์ระบบ</th>
+                <th scope="col" className="d-none d-md-table-cell">ตำแหน่ง</th>
+                <th scope="col" className="d-none d-md-table-cell">สิทธิ์ระบบ</th>
                 <th scope="col">สถานะ</th>
-                <th scope="col" className="text-end">จัดการ</th>
+                <th scope="col" className="text-end table-actions">จัดการ</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
                 <tr key={u.id}>
-                  <td className="fw-medium">{u.username}</td>
-                  <td>{u.fullName}</td>
-                  <td>{u.position ?? ""}</td>
-                  <td>{u.systemRole === "ADMIN" ? "ผู้ดูแลระบบ" : "ผู้ใช้ทั่วไป"}</td>
+                  <td className="fw-medium text-nowrap">{u.username}</td>
+                  <td className="text-nowrap">{u.fullName}</td>
+                  <td className="d-none d-md-table-cell">{u.position ?? ""}</td>
+                  <td className="d-none d-md-table-cell">{u.systemRole === "ADMIN" ? "ผู้ดูแลระบบ" : "ผู้ใช้ทั่วไป"}</td>
                   <td>
                     <StatusChip variant={u.active ? "success" : "secondary"}>{u.active ? "ใช้งาน" : "ปิดใช้งาน"}</StatusChip>
                   </td>
-                  <td className="text-end text-nowrap">
+                  <td className="text-end table-actions">
                     <EditUserDialog user={u} />
                     <ResetPasswordDialog userId={u.id} username={u.username} />
                     <ActiveToggle userId={u.id} active={u.active} isSelf={u.id === admin.id} />

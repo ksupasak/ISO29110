@@ -127,7 +127,7 @@ export function RemoveMemberButton({ member }: { member: TeamMember }) {
           });
         }}
       />
-      {error && <span role="alert" className="text-danger small">{error}</span>}
+      {error && <div role="alert" className="row-error small text-danger">{error}</div>}
     </>
   );
 }

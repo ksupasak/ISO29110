@@ -46,9 +46,11 @@ test("Release 1: admin sets up a project, PM uploads and reviews a WP document",
   await userDialog.getByRole("button", { name: "บันทึก" }).click();
   await expect(userDialog.getByRole("alert")).toHaveText("ชื่อผู้ใช้นี้ถูกใช้แล้ว");
   await expect(userDialog.getByLabel("ชื่อ-นามสกุล")).toHaveValue(PM_NAME);
-  await userDialog.getByRole("button", { name: "Close" }).click();
+  await userDialog.getByRole("button", { name: "ยกเลิก" }).click();
   await expect(userDialog).toBeHidden();
   await page.getByRole("button", { name: "เพิ่มผู้ใช้งาน" }).click();
+  await expect(userDialog.getByRole("button", { name: "ปิด" })).toBeVisible();
+  await expect(userDialog.getByLabel("รหัสผ่าน", { exact: false })).toHaveValue("");
   await expect(userDialog.getByLabel("ชื่อผู้ใช้", { exact: true })).toHaveValue("");
   await expect(userDialog.getByLabel("ชื่อ-นามสกุล")).toHaveValue("");
   await expect(userDialog.getByRole("alert")).toHaveCount(0);
@@ -67,6 +69,18 @@ test("Release 1: admin sets up a project, PM uploads and reviews a WP document",
   await page.getByLabel("ผู้จัดการโครงการ (PM)").selectOption({ label: `${PM_NAME} (${PM_USERNAME})` });
   await page.getByRole("button", { name: "สร้างโครงการ" }).click();
   await expect(page.getByRole("link", { name: new RegExp(PROJECT_CODE) })).toBeVisible();
+
+  // mobile: the users table keeps its row actions in view without scrolling the page sideways
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/admin/users");
+  const pmRow = page.getByRole("row", { name: new RegExp(PM_USERNAME) });
+  const editButton = pmRow.getByRole("button", { name: "แก้ไข" });
+  await expect(editButton).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const editBox = await editButton.boundingBox();
+  expect(editBox).not.toBeNull();
+  expect(editBox!.x + editBox!.width).toBeLessThanOrEqual(390);
+  await page.setViewportSize({ width: 1280, height: 720 });
   await logout(page, "ผู้ดูแลระบบ");
 
   // 2. pm1 sees the team on the project overview

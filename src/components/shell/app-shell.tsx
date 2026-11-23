@@ -18,8 +18,8 @@ export function AppShell({ user, children }: { user: { fullName: string; isAdmin
         <SidebarBrand />
         <SidebarNav isAdmin={user.isAdmin} />
       </aside>
-      <Offcanvas show={menuOpen} onHide={closeMenu} placement="start" id={menuId} className="app-offcanvas">
-        <Offcanvas.Header closeButton closeVariant="white" className="border-bottom border-white border-opacity-10">
+      <Offcanvas show={menuOpen} onHide={closeMenu} placement="start" id={menuId} aria-label="เมนู" className="app-offcanvas">
+        <Offcanvas.Header closeButton closeLabel="ปิด" closeVariant="white" className="border-bottom border-white border-opacity-10">
           <SidebarBrand onNavigate={closeMenu} />
         </Offcanvas.Header>
         <Offcanvas.Body className="p-0">

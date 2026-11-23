@@ -88,17 +88,17 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
             <thead>
               <tr>
                 <th scope="col">ชื่อ-สกุล</th>
-                <th scope="col">ตำแหน่ง</th>
+                <th scope="col" className="d-none d-md-table-cell">ตำแหน่ง</th>
                 <th scope="col">บทบาท</th>
-                {showRate && <th scope="col" className="text-end">อัตรา/วัน</th>}
-                {canManage && <th scope="col" />}
+                {showRate && <th scope="col" className="text-end d-none d-md-table-cell">อัตรา/วัน</th>}
+                {canManage && <th scope="col" className="table-actions" />}
               </tr>
             </thead>
             <tbody>
               {members.map((m) => (
                 <tr key={m.id}>
-                  <td className="fw-medium">{m.fullName}</td>
-                  <td>{m.position ?? "-"}</td>
+                  <td className="fw-medium text-nowrap">{m.fullName}</td>
+                  <td className="d-none d-md-table-cell">{m.position ?? "-"}</td>
                   <td>
                     <span className="d-flex flex-wrap gap-1">
                       {ROLE_ORDER.filter((r) => m.roles.includes(r)).map((r) => (
@@ -106,9 +106,9 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
                       ))}
                     </span>
                   </td>
-                  {showRate && <td className="text-end text-nowrap">{m.dailyRate ? formatBaht(m.dailyRate) : "-"}</td>}
+                  {showRate && <td className="text-end text-nowrap d-none d-md-table-cell">{m.dailyRate ? formatBaht(m.dailyRate) : "-"}</td>}
                   {canManage && (
-                    <td className="text-end text-nowrap">
+                    <td className="text-end table-actions">
                       <EditMemberDialog member={m} />
                       <RemoveMemberButton member={m} />
                     </td>
