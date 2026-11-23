@@ -1,0 +1,20 @@
+name: esm-project
+
+services:
+  postgres:
+    image: postgres:16
+    # Uses the default bridge network: avoids allocating a per-project network
+    # (Docker address pools can be exhausted on machines running many stacks).
+    network_mode: bridge
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: esm
+      POSTGRES_PASSWORD: esm
+      POSTGRES_DB: esm
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+
+volumes:
+  pgdata:
