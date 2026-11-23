@@ -35,3 +35,14 @@
 - ADMIN ที่ไม่ใช่สมาชิกโครงการมีสิทธิ์เขียนทุกโครงการ
 - สมาชิกทุกคนรวม VIEWER เห็นงบประมาณโครงการ
 - ไม่มีการลบ/เก็บถาวรโครงการ และไม่มีการลบผู้ใช้
+
+## จากการเปลี่ยนหน้าตาเป็น Bootstrap + Material (branch ui-material-bootstrap)
+
+- ฟอนต์ไอคอน Material Symbols เป็นไฟล์ 4 MB: ควรตัดให้เหลือเฉพาะไอคอนที่ใช้ (เปิดหน้าครั้งแรกบนเครือข่ายช้าจะเห็นไอคอนช้า)
+- ตัดสินใจ `$min-contrast-ratio` (ตอนนี้ 3) ก่อนเพิ่มปุ่มสี success/info/secondary: ถ้าปรับเป็น 4.5 ปุ่มเขียว/ฟ้าจะใช้ตัวอักษรสีเข้ม
+- ข้อความ error ของตัวเลือกสถานะเอกสาร (doc-controls.tsx) ยังใช้รูปแบบ `text-danger small` ต่างจากที่อื่น
+- FormDialog: แยก prop ขนาดปุ่มออกจาก `triggerVariant`; `IconButton` รองรับ `href`
+- PhaseItem pill และ RoleBadge ซ้ำ markup ของ StatusChip
+- `role="switch"` บน checkbox บทบาท; ชื่อ WP ใช้ text-truncate บนจอสัมผัส
+- สคริปต์ `npm run screens` ใช้ได้เฉพาะ shell แบบ POSIX
+- e2e: ตรวจ scrollWidth ครั้งเดียวโดยไม่รอ render (ความเสี่ยง flaky ต่ำ)
