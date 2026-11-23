@@ -1,4 +1,5 @@
 import type { ProjectRole, ProjectStatus } from "@prisma/client";
+import { isFinalStatus } from "@/lib/wp-catalog";
 
 export const STATUS_LABEL: Record<ProjectStatus, string> = {
   PLANNING: "วางแผน",
@@ -28,3 +29,21 @@ export const ATTACHMENT_KIND_LABEL = {
   EVIDENCE: "หลักฐาน",
   OTHER: "อื่น ๆ",
 } as const;
+
+/** Bootstrap colour for a WP document status: Draft grey, final green (Rejected red), anything in between blue. */
+export function docStatusVariant(status: string): "secondary" | "info" | "success" | "danger" {
+  if (status === "Draft") return "secondary";
+  if (status === "Rejected") return "danger";
+  return isFinalStatus(status) ? "success" : "info";
+}
+
+const PROJECT_STATUS_VARIANT = {
+  PLANNING: "info",
+  ACTIVE: "success",
+  CLOSED: "secondary",
+} as const satisfies Record<ProjectStatus, string>;
+
+/** Bootstrap colour for a project status: planning blue, active green, closed grey. */
+export function projectStatusVariant(status: ProjectStatus): (typeof PROJECT_STATUS_VARIANT)[ProjectStatus] {
+  return PROJECT_STATUS_VARIANT[status];
+}

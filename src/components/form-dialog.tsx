@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useActionState, useId, useState } from "react";
+import Button from "react-bootstrap/Button";
+import Modal from "react-bootstrap/Modal";
 
 type State = { error?: string; ok?: boolean; values?: Record<string, string> };
+type Action = (prev: State, formData: FormData) => Promise<State>;
+type Fields = (values: Record<string, string>) => React.ReactNode;
 
 /** Dialog that submits a server action and closes itself on success; `children` receives the echoed values after an error. */
 export function FormDialog({
@@ -16,29 +18,63 @@ export function FormDialog({
 }: {
   title: string;
   trigger: string;
-  action: (prev: State, formData: FormData) => Promise<State>;
+  action: Action;
   submitLabel?: string;
-  children: (values: Record<string, string>) => React.ReactNode;
+  children: Fields;
 }) {
   const [open, setOpen] = useState(false);
+  // Every opening mounts a fresh form, so an error or echoed values from a cancelled attempt never reappear.
+  const [session, setSession] = useState(0);
+  const titleId = useId();
+  return (
+    <>
+      <Button
+        variant="outline-primary"
+        size="sm"
+        onClick={() => {
+          setSession((n) => n + 1);
+          setOpen(true);
+        }}
+      >
+        {trigger}
+      </Button>
+      <Modal show={open} onHide={() => setOpen(false)} centered aria-labelledby={titleId}>
+        <Modal.Header closeButton>
+          <Modal.Title id={titleId} as="h2" className="h5">{title}</Modal.Title>
+        </Modal.Header>
+        <DialogForm key={session} action={action} submitLabel={submitLabel} onSuccess={() => setOpen(false)}>
+          {children}
+        </DialogForm>
+      </Modal>
+    </>
+  );
+}
+
+function DialogForm({
+  action,
+  submitLabel,
+  onSuccess,
+  children,
+}: {
+  action: Action;
+  submitLabel: string;
+  onSuccess: () => void;
+  children: Fields;
+}) {
   const [state, formAction, pending] = useActionState(async (prev: State, fd: FormData) => {
     const next = await action(prev, fd);
-    if (next.ok) setOpen(false);
+    if (next.ok) onSuccess();
     return next;
   }, {} as State);
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>{trigger}</DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <form action={formAction} className="space-y-3">
-          {children(state.values ?? {})}
-          {state.error && <p role="alert" className="text-sm text-destructive">{state.error}</p>}
-          <Button type="submit" disabled={pending}>{submitLabel}</Button>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <form action={formAction}>
+      <Modal.Body className="d-grid gap-3">
+        {children(state.values ?? {})}
+        {state.error && <p role="alert" className="text-danger small mb-0">{state.error}</p>}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button type="submit" variant="primary" disabled={pending}>{submitLabel}</Button>
+      </Modal.Footer>
+    </form>
   );
 }

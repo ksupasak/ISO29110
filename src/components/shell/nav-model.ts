@@ -1,0 +1,59 @@
+export type NavLink = { href: string; label: string; icon: string; active: boolean };
+export type NavSection = { heading?: string; links: NavLink[] };
+export type Crumb = { label: string; href?: string };
+
+/** The project code when the path is inside `/projects/<code>` (but not the create page), else null. */
+function projectCode(pathname: string): string | null {
+  const [first, code] = pathname.split("/").filter(Boolean);
+  if (first !== "projects" || !code || code === "new") return null;
+  return code;
+}
+
+function decode(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+function within(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/** Sidebar entries for the current path: the main section, plus "โครงการนี้" while inside a project. */
+export function navSections(pathname: string, isAdmin: boolean): NavSection[] {
+  const code = projectCode(pathname);
+  const main: NavLink[] = [
+    { href: "/", label: "โครงการ", icon: "folder_open", active: pathname === "/" || within(pathname, "/projects/new") },
+  ];
+  if (isAdmin) {
+    main.push({ href: "/admin/users", label: "ผู้ใช้งาน", icon: "group", active: within(pathname, "/admin/users") });
+  }
+  const sections: NavSection[] = [{ links: main }];
+  if (code) {
+    const base = `/projects/${code}`;
+    sections.push({
+      heading: "โครงการนี้",
+      links: [
+        { href: base, label: "ภาพรวม", icon: "dashboard", active: pathname === base },
+        { href: `${base}/documents`, label: "เอกสาร", icon: "description", active: within(pathname, `${base}/documents`) },
+      ],
+    });
+  }
+  return sections;
+}
+
+/** Breadcrumb trail for the topbar; the last crumb is the current page and carries no link. */
+export function breadcrumbs(pathname: string): Crumb[] {
+  if (within(pathname, "/admin/users")) return [{ label: "ผู้ใช้งาน" }];
+  if (within(pathname, "/projects/new")) return [{ label: "โครงการ", href: "/" }, { label: "สร้างโครงการ" }];
+  const code = projectCode(pathname);
+  if (!code) return [{ label: "โครงการ" }];
+  const base = `/projects/${code}`;
+  const label = decode(code);
+  if (within(pathname, `${base}/documents`)) {
+    return [{ label: "โครงการ", href: "/" }, { label, href: base }, { label: "เอกสาร" }];
+  }
+  return [{ label: "โครงการ", href: "/" }, { label }];
+}

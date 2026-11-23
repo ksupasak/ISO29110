@@ -8,20 +8,19 @@ const initial: LoginState = {};
 export function LoginForm() {
   const [state, action, pending] = useActionState(loginAction, initial);
   return (
-    <form action={action} className="space-y-4">
-      <div className="space-y-1">
-        <label htmlFor="username" className="text-sm font-medium">ชื่อผู้ใช้</label>
+    <form action={action} className="d-grid gap-3">
+      <div className="form-floating">
         <input id="username" name="username" autoComplete="username" required autoFocus
-          className="w-full rounded-md border px-3 py-2" />
+          className="form-control" placeholder="ชื่อผู้ใช้" />
+        <label htmlFor="username">ชื่อผู้ใช้</label>
       </div>
-      <div className="space-y-1">
-        <label htmlFor="password" className="text-sm font-medium">รหัสผ่าน</label>
+      <div className="form-floating">
         <input id="password" name="password" type="password" autoComplete="current-password" required
-          className="w-full rounded-md border px-3 py-2" />
+          className="form-control" placeholder="รหัสผ่าน" />
+        <label htmlFor="password">รหัสผ่าน</label>
       </div>
-      {state.error && <p role="alert" className="text-sm text-red-600">{state.error}</p>}
-      <button type="submit" disabled={pending}
-        className="w-full rounded-md bg-foreground px-3 py-2 text-background disabled:opacity-50">
+      {state.error && <p role="alert" className="alert alert-danger py-2 px-3 small mb-0">{state.error}</p>}
+      <button type="submit" disabled={pending} className="btn btn-primary btn-lg w-100 mt-1">
         เข้าสู่ระบบ
       </button>
     </form>

@@ -22,6 +22,8 @@ export default defineConfig({
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
       FILE_STORAGE_DIR: E2E_STORAGE_DIR,
       SESSION_COOKIE_SECURE: "false",
+      // Own build directory: never collide with a developer's `next dev` (which uses .next).
+      NEXT_DIST_DIR: ".next-e2e",
     },
   },
 });

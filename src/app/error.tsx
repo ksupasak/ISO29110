@@ -1,12 +1,22 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/icon";
 
 export default function ErrorPage({ retry }: { error: Error & { digest?: string }; retry: () => void }) {
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-md flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-      <h1 className="text-xl font-semibold">เกิดข้อผิดพลาด</h1>
-      <Button onClick={() => retry()}>ลองอีกครั้ง</Button>
+    <main className="status-page">
+      <div className="card">
+        <div className="card-body p-4 p-sm-5 text-center">
+          <span className="status-page-icon text-danger bg-danger-subtle">
+            <Icon name="error" />
+          </span>
+          <h1 className="h4 mb-4">เกิดข้อผิดพลาด</h1>
+          <button type="button" className="btn btn-primary" onClick={() => retry()}>
+            <Icon name="refresh" />
+            ลองอีกครั้ง
+          </button>
+        </div>
+      </div>
     </main>
   );
 }

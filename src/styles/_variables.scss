@@ -1,0 +1,90 @@
+// Bootstrap overrides for the Material admin theme. Loaded before Bootstrap so every `!default` picks these up.
+
+// Palette (global constraints)
+$primary: #1F3864;
+$secondary: #00897B;
+$success: #43A047;
+$warning: #FB8C00;
+$danger: #E53935;
+$info: #1E88E5;
+$body-bg: #F4F6F9;
+$body-color: #263238;
+$headings-color: #1B2433;
+
+// Surfaces: Bootstrap paints these with the body background by default; Material surfaces are white.
+$surface: #FFFFFF;
+$table-bg: $surface;
+$input-bg: $surface;
+$nav-tabs-link-active-bg: $surface;
+$dropdown-bg: $surface;
+$pagination-bg: $surface;
+$card-bg: $surface;
+$accordion-bg: $surface;
+$tooltip-color: $surface;
+$popover-bg: $surface;
+$modal-content-bg: $surface;
+$list-group-bg: $surface;
+$thumbnail-bg: $surface;
+$offcanvas-bg-color: $surface;
+$kbd-color: $surface;
+
+// Material buttons keep white text on the mid-tone success/info fills.
+$min-contrast-ratio: 3;
+
+// Next.js warns about smooth scrolling on <html> (route transitions); keep the browser default.
+$enable-smooth-scroll: false;
+
+// Typography
+$font-family-sans-serif: "Sarabun", system-ui, sans-serif;
+$font-size-base: 0.9375rem;
+$line-height-base: 1.6;
+$headings-font-weight: 600;
+$font-weight-semibold: 600;
+$link-color: $primary;
+$link-decoration: none;
+$link-hover-decoration: underline;
+
+// Shape
+$border-radius: .5rem;
+$border-radius-sm: .375rem;
+$border-radius-lg: .75rem;
+$border-color: #E3E8EF;
+
+// Cards: borderless, elevation comes from the Material layer
+$card-border-width: 0;
+$card-border-radius: .75rem;
+$card-cap-bg: $surface;
+$card-cap-padding-y: .875rem;
+$card-cap-padding-x: 1.25rem;
+$card-spacer-y: 1.25rem;
+$card-spacer-x: 1.25rem;
+
+// Buttons
+$btn-font-weight: 500;
+$btn-padding-x: 1rem;
+$btn-box-shadow: none;
+
+// Fields: outlined, a 2px primary edge on focus
+$input-border-color: #C9D1DC;
+$input-focus-border-color: $primary;
+$input-focus-box-shadow: 0 0 0 1px $primary;
+$form-select-focus-box-shadow: 0 0 0 1px $primary;
+$form-floating-label-opacity: .7;
+$form-label-font-weight: 500;
+
+// Tables
+$table-cell-padding-y: .625rem;
+$table-cell-padding-x: 1rem;
+$table-th-font-weight: 600;
+$table-striped-bg-factor: .03;
+
+// Overlays
+$modal-content-border-width: 0;
+$modal-content-border-radius: .75rem;
+$dropdown-border-width: 0;
+$dropdown-border-radius: .5rem;
+$dropdown-link-active-bg: $primary;
+$offcanvas-horizontal-width: 260px;
+$offcanvas-border-width: 0;
+
+$badge-font-weight: 500;

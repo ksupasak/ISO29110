@@ -1,0 +1,23 @@
+// Entry point: Bootstrap 5.3 with the project's Material theme.
+// Fonts (Sarabun) and icons (Material Symbols Outlined) are imported from npm in src/app/layout.tsx.
+@import "variables";
+
+// Bootstrap's Sass API (no CSS output) for the Material and shell partials below.
+@import "bootstrap/scss/functions";
+@import "bootstrap/scss/variables";
+@import "bootstrap/scss/variables-dark";
+@import "bootstrap/scss/maps";
+@import "bootstrap/scss/mixins";
+@import "bootstrap/scss/utilities";
+
+// While pages not yet migrated still use Tailwind (loaded after this file), Bootstrap's CSS sits in a cascade
+// layer after Tailwind's preflight and before its utilities: Bootstrap overrides preflight, Tailwind classes
+// keep working on the old pages. The Material layer below is unlayered and wins over both.
+@layer theme, base, bootstrap, components, utilities;
+
+@layer bootstrap {
+  @import "bootstrap/scss/bootstrap";
+}
+
+@import "material";
+@import "shell";

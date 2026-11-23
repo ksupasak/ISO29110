@@ -51,7 +51,7 @@ test("Release 1: admin sets up a project, PM uploads and reviews a WP document",
   await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT_CODE}$`));
   const teamRow = page.getByRole("row", { name: new RegExp(PM_NAME) });
   await expect(teamRow).toContainText("ผู้จัดการโครงการ");
-  await page.getByRole("link", { name: "เอกสาร" }).click();
+  await page.getByRole("navigation", { name: "เมนูหลัก" }).getByRole("link", { name: "เอกสาร" }).click();
 
   // 3. nine phases, 23 WPs
   await expect(page.getByTestId("phase-heading")).toHaveCount(9);

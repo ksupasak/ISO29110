@@ -1,0 +1,260 @@
+// Admin shell: fixed primary sidebar (>= lg), white elevated topbar, content area.
+
+$sidebar-width: 260px;
+$topbar-height: 4rem;
+
+.app-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: $zindex-fixed;
+  display: none;
+  flex-direction: column;
+  width: $sidebar-width;
+  color: rgba($white, .78);
+  background-color: $primary;
+  background-image: linear-gradient(180deg, tint-color($primary, 6%) 0%, shade-color($primary, 22%) 100%);
+  box-shadow: $elevation-2;
+
+  @include media-breakpoint-up(lg) {
+    display: flex;
+  }
+}
+
+// The offcanvas reuses the sidebar look on small screens.
+.app-offcanvas {
+  color: rgba($white, .78);
+  background-color: $primary;
+  background-image: linear-gradient(180deg, tint-color($primary, 6%) 0%, shade-color($primary, 22%) 100%);
+
+  .offcanvas-header {
+    padding: 0 .75rem 0 0;
+  }
+}
+
+.sidebar-brand {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: .75rem;
+  height: $topbar-height;
+  padding: 0 1.25rem;
+  color: $white;
+  text-decoration: none;
+  border-bottom: 1px solid rgba($white, .12);
+
+  &:hover {
+    color: $white;
+    text-decoration: none;
+  }
+
+  .app-offcanvas & {
+    flex: 1 1 auto;
+    border-bottom: 0;
+  }
+}
+
+.sidebar-brand-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: $primary;
+  background-color: $white;
+  border-radius: $border-radius;
+  box-shadow: $elevation-2;
+
+  .material-symbols-outlined { font-size: 1.375rem; }
+}
+
+.sidebar-brand-name {
+  display: block;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: .01em;
+}
+
+.sidebar-brand-sub {
+  display: block;
+  font-size: .75rem;
+  line-height: 1.2;
+  color: rgba($white, .6);
+  letter-spacing: .04em;
+}
+
+.sidebar-nav {
+  flex: 1 1 auto;
+  padding: 1rem 0;
+  overflow-y: auto;
+}
+
+.sidebar-section {
+  margin: 1.25rem 1.5rem .5rem;
+  font-size: .75rem;
+  font-weight: 600;
+  color: rgba($white, .5);
+  letter-spacing: .06em;
+
+  &::before {
+    display: block;
+    margin-bottom: 1rem;
+    content: "";
+    border-top: 1px solid rgba($white, .12);
+  }
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: .875rem;
+  padding: .625rem 1rem;
+  margin: .125rem .75rem;
+  color: rgba($white, .78);
+  text-decoration: none;
+  border-radius: $border-radius;
+  transition: background-color .15s ease-in-out, color .15s ease-in-out, box-shadow .15s ease-in-out;
+
+  .material-symbols-outlined { font-size: 1.375rem; }
+
+  &:hover {
+    color: $white;
+    text-decoration: none;
+    background-color: rgba($white, .08);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba($white, .7);
+    outline-offset: -2px;
+  }
+
+  &.active {
+    font-weight: 600;
+    color: $white;
+    background-color: rgba($white, .16);
+    box-shadow: 0 2px 6px rgba(shade-color($primary, 60%), .35);
+
+    .material-symbols-outlined { font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24; }
+  }
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100vh;
+
+  @include media-breakpoint-up(lg) {
+    margin-left: $sidebar-width;
+  }
+}
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: $zindex-sticky;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  height: $topbar-height;
+  padding: 0 .75rem;
+  background-color: $white;
+  box-shadow: $elevation-1;
+
+  @include media-breakpoint-up(lg) {
+    padding: 0 1.5rem;
+  }
+}
+
+.app-breadcrumb-nav {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-breadcrumb {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  font-size: 1rem;
+  list-style: none;
+
+  li {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:not(:last-child) { flex-shrink: 1; }
+    &:last-child { flex-shrink: 0; max-width: 100%; }
+  }
+
+  a {
+    color: $gray-600;
+
+    &:hover { color: $primary; }
+  }
+
+  [aria-current="page"] {
+    font-weight: 600;
+    color: $headings-color;
+  }
+}
+
+.app-breadcrumb-sep {
+  flex-shrink: 0;
+  padding: 0 .5rem;
+  color: $gray-500;
+}
+
+.user-menu-toggle {
+  --bs-btn-padding-x: .5rem;
+  --bs-btn-padding-y: .25rem;
+  --bs-btn-border-width: 0;
+  --bs-btn-color: #{$body-color};
+  --bs-btn-hover-color: #{$body-color};
+  --bs-btn-hover-bg: #{rgba($primary, .06)};
+  --bs-btn-active-bg: #{rgba($primary, .1)};
+  --bs-btn-active-color: #{$body-color};
+  min-width: 0;
+  max-width: 16rem;
+  border-radius: $border-radius-pill;
+
+  &::after { display: none; }
+}
+
+.user-avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  font-size: .875rem;
+  font-weight: 600;
+  color: $white;
+  background-color: $secondary;
+  border-radius: 50%;
+}
+
+.user-menu-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-content {
+  flex: 1 1 auto;
+  width: 100%;
+  padding: 1.5rem 1rem;
+
+  @include media-breakpoint-up(lg) {
+    padding: 2rem;
+  }
+}

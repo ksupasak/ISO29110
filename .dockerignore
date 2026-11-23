@@ -10,3 +10,5 @@ playwright-report
 docs
 .superpowers
 *.tsbuildinfo
+.next-e2e
+.next-build
