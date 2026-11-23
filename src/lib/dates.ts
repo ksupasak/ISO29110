@@ -1,4 +1,4 @@
-const parts = new Intl.DateTimeFormat("en-GB-u-ca-buddhist", {
+const formatter = new Intl.DateTimeFormat("en-GB-u-ca-buddhist", {
   timeZone: "Asia/Bangkok",
   day: "2-digit",
   month: "2-digit",
@@ -7,6 +7,7 @@ const parts = new Intl.DateTimeFormat("en-GB-u-ca-buddhist", {
 
 export function formatThaiDate(d: Date | null | undefined): string {
   if (!d) return "";
-  const get = (type: string) => parts.formatToParts(d).find((p) => p.type === type)!.value;
+  const parts = formatter.formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
   return `${get("day")}/${get("month")}/${get("year")}`;
 }
