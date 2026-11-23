@@ -15,6 +15,12 @@ export function ProjectStatusBadge({ status }: { status: ProjectStatus }) {
   return <StatusChip variant={projectStatusVariant(status)}>{STATUS_LABEL[status]}</StatusChip>;
 }
 
-export function RoleBadge({ role }: { role: ProjectRole }) {
-  return <StatusChip variant="primary">{ROLE_LABEL[role]}</StatusChip>;
+/** Project role chip; the member's primary role is filled and keeps the "*" the team table's legend refers to. */
+export function RoleBadge({ role, primary = false }: { role: ProjectRole; primary?: boolean }) {
+  return (
+    <span className={primary ? "badge-status badge-status-primary badge-status-emphasis" : "badge-status badge-status-primary"}>
+      {ROLE_LABEL[role]}
+      {primary && " *"}
+    </span>
+  );
 }

@@ -2,12 +2,11 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/current-user";
 import { can, getActor } from "@/lib/authz";
 import { formatThaiDate } from "@/lib/dates";
-import { ROLE_LABEL, ROLE_ORDER, STATUS_LABEL, formatBaht } from "@/lib/labels";
+import { ROLE_ORDER, formatBaht } from "@/lib/labels";
 import { getProjectByCode } from "@/features/projects/service";
 import { listAssignableUsers, listMembers } from "@/features/members/service";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AppCard } from "@/components/app-card";
+import { ProjectStatusBadge, RoleBadge } from "@/components/status-badge";
 import { EditProjectDialog } from "./edit-project-dialog";
 import { AddMemberDialog, EditMemberDialog, RemoveMemberButton } from "./team-dialogs";
 
@@ -34,19 +33,19 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
     ["ชื่อย่อ", project.shortName || "-"],
     ["ลูกค้า", project.customerName || "-"],
     ["ประเภท", project.type],
-    ["สถานะ", <Badge key="s" variant="secondary">{STATUS_LABEL[project.status]}</Badge>],
+    ["สถานะ", <ProjectStatusBadge key="s" status={project.status} />],
     ["วันเริ่ม", formatThaiDate(project.startDate) || "-"],
     ["วันสิ้นสุด", formatThaiDate(project.endDate) || "-"],
     ["งบประมาณ", project.budget != null ? formatBaht(project.budget.toFixed(2)) : "-"],
-    ["รายละเอียด", project.description ? <span key="d" className="whitespace-pre-wrap">{project.description}</span> : "-"],
   ];
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>ข้อมูลโครงการ</CardTitle>
-          {canEdit && (
+    <div className="d-grid gap-4">
+      <AppCard
+        title="ข้อมูลโครงการ"
+        icon="info"
+        actions={
+          canEdit && (
             <EditProjectDialog
               project={{
                 id: project.id,
@@ -60,58 +59,67 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
                 description: project.description ?? "",
               }}
             />
-          )}
-        </CardHeader>
-        <CardContent>
-          <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[10rem_1fr]">
-            {facts.map(([label, value]) => (
-              <div key={label} className="contents">
-                <dt className="text-muted-foreground">{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </CardContent>
-      </Card>
+          )
+        }
+      >
+        <dl className="card-body row g-3 mb-0">
+          {facts.map(([label, value]) => (
+            <div key={label} className="col-sm-6">
+              <dt className="small fw-medium text-body-secondary">{label}</dt>
+              <dd className="mb-0">{value}</dd>
+            </div>
+          ))}
+          <div className="col-12">
+            <dt className="small fw-medium text-body-secondary">รายละเอียด</dt>
+            <dd className="mb-0">
+              {project.description ? <span className="text-pre-wrap">{project.description}</span> : "-"}
+            </dd>
+          </div>
+        </dl>
+      </AppCard>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>ทีมงาน</CardTitle>
-          {canManage && <AddMemberDialog projectId={project.id} users={assignable} />}
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ชื่อ-สกุล</TableHead>
-                <TableHead>ตำแหน่ง</TableHead>
-                <TableHead>บทบาท</TableHead>
-                {showRate && <TableHead className="text-right">อัตรา/วัน</TableHead>}
-                {canManage && <TableHead />}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+      <AppCard
+        title="ทีมงาน"
+        icon="groups"
+        actions={canManage && <AddMemberDialog projectId={project.id} users={assignable} />}
+      >
+        <div className="table-responsive">
+          <table className="table table-hover align-middle">
+            <thead>
+              <tr>
+                <th scope="col">ชื่อ-สกุล</th>
+                <th scope="col">ตำแหน่ง</th>
+                <th scope="col">บทบาท</th>
+                {showRate && <th scope="col" className="text-end">อัตรา/วัน</th>}
+                {canManage && <th scope="col" />}
+              </tr>
+            </thead>
+            <tbody>
               {members.map((m) => (
-                <TableRow key={m.id}>
-                  <TableCell>{m.fullName}</TableCell>
-                  <TableCell>{m.position ?? "-"}</TableCell>
-                  <TableCell>
-                    {ROLE_ORDER.filter((r) => m.roles.includes(r)).map((r) => ROLE_LABEL[r] + (r === m.primaryRole ? " *" : "")).join(", ")}
-                  </TableCell>
-                  {showRate && <TableCell className="text-right">{m.dailyRate ? formatBaht(m.dailyRate) : "-"}</TableCell>}
+                <tr key={m.id}>
+                  <td className="fw-medium">{m.fullName}</td>
+                  <td>{m.position ?? "-"}</td>
+                  <td>
+                    <span className="d-flex flex-wrap gap-1">
+                      {ROLE_ORDER.filter((r) => m.roles.includes(r)).map((r) => (
+                        <RoleBadge key={r} role={r} primary={r === m.primaryRole} />
+                      ))}
+                    </span>
+                  </td>
+                  {showRate && <td className="text-end text-nowrap">{m.dailyRate ? formatBaht(m.dailyRate) : "-"}</td>}
                   {canManage && (
-                    <TableCell className="space-x-2 text-right">
+                    <td className="text-end text-nowrap">
                       <EditMemberDialog member={m} />
                       <RemoveMemberButton member={m} />
-                    </TableCell>
+                    </td>
                   )}
-                </TableRow>
+                </tr>
               ))}
-            </TableBody>
-          </Table>
-          <p className="mt-2 text-xs text-muted-foreground">* บทบาทหลัก</p>
-        </CardContent>
-      </Card>
+            </tbody>
+          </table>
+        </div>
+        <p className="card-footer small text-body-secondary mb-0">* บทบาทหลัก</p>
+      </AppCard>
     </div>
   );
 }

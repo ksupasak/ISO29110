@@ -4,9 +4,8 @@ import { useState, useTransition } from "react";
 import type { ProjectRole } from "@prisma/client";
 import { addMemberAction, removeMemberAction, updateMemberAction } from "@/features/members/actions";
 import { FormDialog } from "@/components/form-dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FloatingField, FloatingSelect } from "@/components/form-fields";
+import { IconButton } from "@/components/icon-button";
 import { ROLE_LABEL, ROLE_ORDER } from "@/lib/labels";
 
 export type TeamMember = {
@@ -17,9 +16,7 @@ export type TeamMember = {
   dailyRate: string | null;
 };
 
-const SELECT_CLASS = "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
-
-/** Role checkboxes plus a primary-role select limited to the checked roles. */
+/** Role switches plus a primary-role select limited to the checked roles. */
 function RoleFields({ initialRoles, initialPrimary }: { initialRoles: ProjectRole[]; initialPrimary: ProjectRole | "" }) {
   const [roles, setRoles] = useState<ProjectRole[]>(initialRoles);
   const [primary, setPrimary] = useState<ProjectRole | "">(initialPrimary);
@@ -30,37 +27,40 @@ function RoleFields({ initialRoles, initialPrimary }: { initialRoles: ProjectRol
   };
   return (
     <>
-      <fieldset className="space-y-1">
-        <legend className="text-sm font-medium">บทบาท</legend>
-        <div className="grid grid-cols-2 gap-1">
+      <fieldset>
+        <legend className="form-label small fw-medium text-body-secondary">บทบาท</legend>
+        <div className="row row-cols-1 row-cols-sm-2 g-2">
           {ROLE_ORDER.map((r) => (
-            <label key={r} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="roles" value={r} checked={roles.includes(r)} onChange={(e) => toggle(r, e.target.checked)} />
-              {ROLE_LABEL[r]}
-            </label>
+            <div key={r} className="col">
+              <div className="form-check form-switch">
+                <input
+                  id={`role-${r}`}
+                  type="checkbox"
+                  role="switch"
+                  className="form-check-input"
+                  name="roles"
+                  value={r}
+                  checked={roles.includes(r)}
+                  onChange={(e) => toggle(r, e.target.checked)}
+                />
+                <label htmlFor={`role-${r}`} className="form-check-label">{ROLE_LABEL[r]}</label>
+              </div>
+            </div>
           ))}
         </div>
       </fieldset>
-      <div className="space-y-1">
-        <Label htmlFor="primaryRole">บทบาทหลัก</Label>
-        <select id="primaryRole" name="primaryRole" value={primary} onChange={(e) => setPrimary(e.target.value as ProjectRole)} className={SELECT_CLASS}>
-          {roles.length === 0 && <option value="">เลือกบทบาทก่อน</option>}
-          {ROLE_ORDER.filter((r) => roles.includes(r)).map((r) => (
-            <option key={r} value={r}>{ROLE_LABEL[r]}</option>
-          ))}
-        </select>
-      </div>
+      <FloatingSelect id="primaryRole" label="บทบาทหลัก" value={primary} onChange={(e) => setPrimary(e.target.value as ProjectRole)}>
+        {roles.length === 0 && <option value="">เลือกบทบาทก่อน</option>}
+        {ROLE_ORDER.filter((r) => roles.includes(r)).map((r) => (
+          <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+        ))}
+      </FloatingSelect>
     </>
   );
 }
 
 function RateField({ defaultValue }: { defaultValue?: string }) {
-  return (
-    <div className="space-y-1">
-      <Label htmlFor="dailyRate">อัตรา/วัน (บาท)</Label>
-      <Input id="dailyRate" name="dailyRate" type="number" min="0" step="0.01" defaultValue={defaultValue} />
-    </div>
-  );
+  return <FloatingField id="dailyRate" label="อัตรา/วัน (บาท)" type="number" min="0" step="0.01" defaultValue={defaultValue} />;
 }
 
 export function AddMemberDialog({
@@ -71,19 +71,16 @@ export function AddMemberDialog({
   users: { id: string; fullName: string; position: string | null }[];
 }) {
   return (
-    <FormDialog title="เพิ่มสมาชิกทีม" trigger="เพิ่มสมาชิก" action={addMemberAction}>
+    <FormDialog title="เพิ่มสมาชิกทีม" trigger="เพิ่มสมาชิก" action={addMemberAction} triggerIcon="person_add">
       {(v) => (
         <>
           <input type="hidden" name="projectId" value={projectId} />
-          <div className="space-y-1">
-            <Label htmlFor="userId">ผู้ใช้</Label>
-            <select key={v.userId ?? ""} id="userId" name="userId" required defaultValue={v.userId ?? ""} className={SELECT_CLASS}>
-              <option value="" disabled>เลือกผู้ใช้</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>{u.fullName}{u.position ? ` (${u.position})` : ""}</option>
-              ))}
-            </select>
-          </div>
+          <FloatingSelect key={v.userId ?? ""} id="userId" label="ผู้ใช้" required defaultValue={v.userId ?? ""}>
+            <option value="" disabled>เลือกผู้ใช้</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.fullName}{u.position ? ` (${u.position})` : ""}</option>
+            ))}
+          </FloatingSelect>
           <RoleFields
             initialRoles={(v.roles ? v.roles.split(",") : []) as ProjectRole[]}
             initialPrimary={(v.primaryRole ?? "") as ProjectRole | ""}
@@ -97,7 +94,7 @@ export function AddMemberDialog({
 
 export function EditMemberDialog({ member }: { member: TeamMember }) {
   return (
-    <FormDialog title={`แก้ไข ${member.fullName}`} trigger="แก้ไข" action={updateMemberAction}>
+    <FormDialog title={`แก้ไข ${member.fullName}`} trigger="แก้ไข" action={updateMemberAction} triggerIcon="edit" iconOnly>
       {(v) => (
         <>
           <input type="hidden" name="memberId" value={member.id} />
@@ -117,9 +114,10 @@ export function RemoveMemberButton({ member }: { member: TeamMember }) {
   const [error, setError] = useState<string | null>(null);
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
+      <IconButton
+        icon="person_remove"
+        label="ลบ"
+        tone="danger"
         disabled={pending}
         onClick={() => {
           if (!window.confirm(`ลบ ${member.fullName} ออกจากทีม?`)) return;
@@ -128,10 +126,8 @@ export function RemoveMemberButton({ member }: { member: TeamMember }) {
             setError(r.error ?? null);
           });
         }}
-      >
-        ลบ
-      </Button>
-      {error && <span role="alert" className="text-xs text-destructive">{error}</span>}
+      />
+      {error && <span role="alert" className="text-danger small">{error}</span>}
     </>
   );
 }

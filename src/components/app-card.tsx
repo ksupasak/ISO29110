@@ -8,11 +8,14 @@ export function AppCard({
   title,
   icon,
   headerVariant = "plain",
+  actions,
   children,
 }: {
   title?: string;
   icon?: string;
   headerVariant?: "primary" | "plain";
+  /** Controls aligned to the right of the header (needs `title`). */
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -25,6 +28,7 @@ export function AppCard({
             </span>
           )}
           <h2 className="card-title">{title}</h2>
+          {actions && <div className="ms-auto d-flex align-items-center gap-1">{actions}</div>}
         </div>
       )}
       {children}

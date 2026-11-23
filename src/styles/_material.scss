@@ -185,6 +185,11 @@ body {
   background-color: rgba($primary, .08);
 }
 
+.badge-status-emphasis {
+  color: $white;
+  background-color: $primary;
+}
+
 // Page header
 .page-header {
   display: flex;
@@ -319,3 +324,5 @@ body {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+
+.text-pre-wrap { white-space: pre-wrap; }
