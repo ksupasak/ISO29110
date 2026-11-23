@@ -6,12 +6,31 @@ import { FormDialog } from "@/components/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ATTACHMENT_KIND_LABEL } from "@/lib/labels";
+import { FILE_TOO_LARGE_MESSAGE, MAX_FILE_BYTES } from "@/lib/upload-limits";
 
 const SELECT_CLASS = "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
 
+type FormState = Awaited<ReturnType<typeof uploadVersionAction>>;
+
+/** Rejects an oversize file in the browser, before anything is sent to the server. */
+function withSizeCheck(action: (prev: FormState, fd: FormData) => Promise<FormState>, textFields: string[]) {
+  return async (prev: FormState, fd: FormData): Promise<FormState> => {
+    const f = fd.get("file");
+    if (f instanceof File && f.size > MAX_FILE_BYTES) {
+      const values: Record<string, string> = {};
+      for (const k of textFields) values[k] = String(fd.get(k) ?? "");
+      return { error: FILE_TOO_LARGE_MESSAGE, values };
+    }
+    return action(prev, fd);
+  };
+}
+
+const uploadWithCheck = withSizeCheck(uploadVersionAction, ["version", "note"]);
+const attachWithCheck = withSizeCheck(addAttachmentAction, ["kind"]);
+
 export function UploadVersionDialog({ projectId, wpCode, label }: { projectId: string; wpCode: string; label: string }) {
   return (
-    <FormDialog title={`อัปโหลดเวอร์ชันใหม่ ${label}`} trigger="อัปโหลดเวอร์ชันใหม่" action={uploadVersionAction} submitLabel="อัปโหลด">
+    <FormDialog title={`อัปโหลดเวอร์ชันใหม่ ${label}`} trigger="อัปโหลดเวอร์ชันใหม่" action={uploadWithCheck} submitLabel="อัปโหลด">
       {(v) => (
         <>
           <input type="hidden" name="projectId" value={projectId} />
@@ -36,7 +55,7 @@ export function UploadVersionDialog({ projectId, wpCode, label }: { projectId: s
 
 export function AttachEvidenceDialog({ projectId, entityId, wpCode }: { projectId: string; entityId: string; wpCode: string }) {
   return (
-    <FormDialog title={`แนบหลักฐาน ${wpCode}`} trigger="แนบหลักฐาน" action={addAttachmentAction} submitLabel="แนบไฟล์">
+    <FormDialog title={`แนบหลักฐาน ${wpCode}`} trigger="แนบหลักฐาน" action={attachWithCheck} submitLabel="แนบไฟล์">
       {(v) => (
         <>
           <input type="hidden" name="projectId" value={projectId} />
@@ -68,6 +87,7 @@ export function StatusSelect({
   projectId: string;
   wpCode: string;
   status: string;
+  /** Only statuses the viewer may set, plus the current one. */
   options: string[];
 }) {
   const [pending, startTransition] = useTransition();

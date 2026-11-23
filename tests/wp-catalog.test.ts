@@ -1,4 +1,4 @@
-import { WP_CATALOG, PHASES, getWp } from "@/lib/wp-catalog";
+import { WP_CATALOG, PHASES, FINAL_STATUSES, getWp, isFinalStatus } from "@/lib/wp-catalog";
 
 test("23 work products, unique codes WP01..WP23, seq 1..23", () => {
   expect(WP_CATALOG).toHaveLength(23);
@@ -22,4 +22,10 @@ test("phase membership matches the standard", () => {
 
 test("unknown code throws", () => {
   expect(() => getWp("WP99")).toThrow();
+});
+
+test("isFinalStatus recognises the seven final statuses only", () => {
+  for (const s of FINAL_STATUSES) expect(isFinalStatus(s)).toBe(true);
+  expect(FINAL_STATUSES).toHaveLength(7);
+  for (const s of ["Draft", "Verified", "Reviewed"]) expect(isFinalStatus(s)).toBe(false);
 });

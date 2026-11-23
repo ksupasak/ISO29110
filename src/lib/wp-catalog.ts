@@ -220,3 +220,10 @@ export function getWp(code: string): WpDef {
   if (!wp) throw new Error(`Unknown work product code: ${code}`);
   return wp;
 }
+
+/** Statuses that close a work product; only roles with `document.baseline` may set or undo them. */
+export const FINAL_STATUSES = ["Approved", "Published", "Baselined", "Accepted", "Rejected", "Completed", "Signed"] as const;
+
+export function isFinalStatus(status: string): boolean {
+  return (FINAL_STATUSES as readonly string[]).includes(status);
+}

@@ -2,8 +2,9 @@ import { Prisma, type AttachmentKind, type DocumentVersion, type User } from "@p
 import { prisma } from "@/lib/db";
 import { can, getActor } from "@/lib/authz";
 import { fail, ok, type ActionResult } from "@/lib/result";
-import { deleteFile, MAX_FILE_BYTES, saveFile } from "@/lib/storage";
-import { PHASES, WP_CATALOG, getWp, type Phase, type WpDef } from "@/lib/wp-catalog";
+import { deleteFile, saveFile } from "@/lib/storage";
+import { FILE_TOO_LARGE_MESSAGE, MAX_FILE_BYTES } from "@/lib/upload-limits";
+import { PHASES, WP_CATALOG, getWp, isFinalStatus, type Phase, type WpDef } from "@/lib/wp-catalog";
 
 const FORBIDDEN = "ไม่มีสิทธิ์ดำเนินการ";
 const VERSION_RE = /^\d+\.\d+(\.\d+)?$/;
@@ -51,7 +52,7 @@ async function discardFile(storedPath: string): Promise<void> {
 
 function checkFile(data: Buffer): string | null {
   if (data.length === 0) return "ไฟล์ว่างเปล่า";
-  if (data.length > MAX_FILE_BYTES) return "ไฟล์ใหญ่เกิน 50 MB";
+  if (data.length > MAX_FILE_BYTES) return FILE_TOO_LARGE_MESSAGE;
   return null;
 }
 
@@ -122,12 +123,15 @@ export async function setDocumentStatus(
   status: string,
 ): Promise<ActionResult<null>> {
   const actor = await getActor(user, projectId);
-  if (!can(actor, status === "Baselined" ? "document.baseline" : "document.setStatus")) return fail(FORBIDDEN);
   const wp = knownWp(wpCode);
-  if (!wp) return fail("ไม่พบเอกสาร");
+  if (!wp) return can(actor, "document.setStatus") ? fail("ไม่พบเอกสาร") : fail(FORBIDDEN);
+  const doc = await prisma.wpDocument.findUnique({ where: { projectId_wpCode: { projectId, wpCode } } });
+  const needsBaseline = isFinalStatus(status) || (doc !== null && isFinalStatus(doc.status));
+  if (!can(actor, needsBaseline ? "document.baseline" : "document.setStatus")) return fail(FORBIDDEN);
+  if (!doc) return fail("ไม่พบเอกสาร");
   if (!["Draft", ...wp.states].includes(status)) return fail("สถานะไม่ถูกต้อง");
-  const r = await prisma.wpDocument.updateMany({ where: { projectId, wpCode }, data: { status } });
-  return r.count === 0 ? fail("ไม่พบเอกสาร") : ok(null);
+  await prisma.wpDocument.update({ where: { id: doc.id }, data: { status } });
+  return ok(null);
 }
 
 export async function addAttachment(

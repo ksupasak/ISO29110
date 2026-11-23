@@ -15,7 +15,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U esm -d esm"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U esm -d esm"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -33,6 +33,7 @@ services:
       FILE_STORAGE_DIR: /data/files
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      SEED_RESET_ADMIN: ${SEED_RESET_ADMIN:-}
     volumes:
       - files:/data/files
 

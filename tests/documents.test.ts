@@ -121,6 +121,30 @@ describe("setDocumentStatus", () => {
   });
 });
 
+describe("setDocumentStatus final statuses", () => {
+  const statusOf = async (wp: string) =>
+    (await prisma.wpDocument.findUniqueOrThrow({ where: { projectId_wpCode: { projectId: project.id, wpCode: wp } } })).status;
+
+  test("analyst cannot set a final status; PM can", async () => {
+    for (const [wp, status] of [["WP10", "Accepted"], ["WP01", "Signed"], ["WP16", "Approved"], ["WP13", "Baselined"]] as const) {
+      expect((await setDocumentStatus(analyst, project.id, wp, status)).ok).toBe(false);
+      expect(await statusOf(wp)).toBe("Draft");
+      expect((await setDocumentStatus(pm, project.id, wp, status)).ok).toBe(true);
+      expect(await statusOf(wp)).toBe(status);
+    }
+  });
+
+  test("a final status cannot be undone by an analyst, but PM can", async () => {
+    expect((await setDocumentStatus(analyst, project.id, "WP13", "Verified")).ok).toBe(true);
+    expect((await setDocumentStatus(tl, project.id, "WP13", "Baselined")).ok).toBe(true);
+    expect((await setDocumentStatus(analyst, project.id, "WP13", "Draft")).ok).toBe(false);
+    expect((await setDocumentStatus(analyst, project.id, "WP13", "Verified")).ok).toBe(false);
+    expect(await statusOf("WP13")).toBe("Baselined");
+    expect((await setDocumentStatus(pm, project.id, "WP13", "Draft")).ok).toBe(true);
+    expect(await statusOf("WP13")).toBe("Draft");
+  });
+});
+
 describe("listDocuments", () => {
   test("groups 23 WPs into 9 phases in catalogue order", async () => {
     const v = await listDocuments(pm, project.id);

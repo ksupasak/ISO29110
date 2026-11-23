@@ -6,7 +6,27 @@ function storageDir(): string {
   return path.resolve(process.env.FILE_STORAGE_DIR ?? "./test-storage");
 }
 
+/** Refuse to touch any database whose name does not end with `_test`. */
+export function assertTestDatabaseUrl(url: string | undefined): void {
+  let name = "";
+  try {
+    name = url ? new URL(url).pathname.replace(/^\//, "") : "";
+  } catch {
+    // fall through to the error below
+  }
+  if (!name.endsWith("_test")) throw new Error("resetDb refused: the database name in DATABASE_URL must end with _test");
+}
+
+/** Refuse to empty any directory that is not named `test-storage`. */
+export function assertTestStorageDir(dir: string): void {
+  if (path.basename(path.resolve(dir)) !== "test-storage") {
+    throw new Error("resetDb refused: the storage directory must be named test-storage");
+  }
+}
+
 export async function resetDb(): Promise<void> {
+  assertTestDatabaseUrl(process.env.DATABASE_URL);
+  assertTestStorageDir(storageDir());
   const tables = await prisma.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables
     WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;

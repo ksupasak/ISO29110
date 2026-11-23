@@ -27,11 +27,15 @@
    |---|---|
    | `POSTGRES_PASSWORD` | รหัสผ่านฐานข้อมูล (ใช้ตอนสร้างฐานข้อมูลครั้งแรกเท่านั้น) |
    | `DATABASE_URL` | `postgresql://esm:<POSTGRES_PASSWORD>@postgres:5432/esm` (โฮสต์คือ `postgres`, รหัสผ่านต้องตรงกับข้างบน) |
-   | `SEED_ADMIN_PASSWORD` | รหัสผ่านเริ่มต้นของผู้ใช้ `admin` |
+   | `SEED_ADMIN_PASSWORD` | รหัสผ่านเริ่มต้นของผู้ใช้ `admin` (ใช้ตอนรัน seed; หลังใช้ครั้งแรกให้ลบค่านี้ออกจาก `.env` ให้เป็นค่าว่าง) |
+   | `SEED_RESET_ADMIN` | (ไม่บังคับ) ตั้งเป็น `true` เฉพาะเมื่อต้องการให้ seed รีเซ็ตรหัสผ่าน/บทบาทของ `admin` ที่มีอยู่แล้ว ปกติไม่ต้องตั้ง |
    | `SESSION_COOKIE_SECURE` | ตั้งเป็น `true` เมื่อใช้งานผ่าน HTTPS |
    | `APP_PORT` | (ไม่บังคับ) พอร์ตของแอปบนเครื่อง ค่าเริ่มต้น 3000 |
 
    ห้าม commit ไฟล์ `.env`
+
+   **ข้อควรระวังเรื่องรหัสผ่านฐานข้อมูล:** `POSTGRES_PASSWORD` ถูกใช้ตรงตัวโดย PostgreSQL และถูกใช้อีกครั้งใน `DATABASE_URL`
+   ให้ใช้เฉพาะอักขระ `A-Za-z0-9_-` หรือถ้าใช้อักขระอื่นต้องทำ percent-encode รหัสผ่านใน `DATABASE_URL` (เช่น `@` เป็น `%40`)
 
 4. สร้างและเริ่มระบบ (แอปจะรัน `prisma migrate deploy` เองทุกครั้งที่เริ่ม)
 
@@ -49,7 +53,9 @@
 docker compose exec app npx tsx prisma/seed.ts
 ```
 
-จะได้ผู้ใช้ `admin` พร้อมรหัสผ่านตาม `SEED_ADMIN_PASSWORD` (รันซ้ำจะรีเซ็ตรหัสผ่านของ `admin`)
+จะได้ผู้ใช้ `admin` พร้อมรหัสผ่านตาม `SEED_ADMIN_PASSWORD` ถ้ามีผู้ใช้ `admin` อยู่แล้ว seed **จะไม่แก้ไข** ผู้ใช้นั้น
+(ถ้าลืมรหัสผ่านและต้องการรีเซ็ต ให้ตั้ง `SEED_RESET_ADMIN=true` ใน `.env` รัน seed หนึ่งครั้ง แล้วลบตัวแปรนี้ออก)
+หลังสร้างผู้ดูแลระบบแล้ว ให้ลบค่า `SEED_ADMIN_PASSWORD` ใน `.env` ให้เป็นค่าว่าง แล้วรัน `docker compose up -d` เพื่อให้แอปอ่านค่าใหม่
 จากนั้นเข้าสู่ระบบที่ `http://<เซิร์ฟเวอร์>:3000` แล้วสร้างผู้ใช้อื่นที่เมนู "ผู้ใช้งาน"
 
 ## สำรองข้อมูลและกู้คืน
@@ -71,15 +77,41 @@ docker run --rm -v esm-project_files:/data/files:ro -v "$PWD/backup":/backup alp
 
 ### กู้คืน
 
+> การกู้คืนจะเขียนทับข้อมูลปัจจุบัน ควรหยุดแอปก่อนเพื่อไม่ให้มีการเขียนข้อมูลระหว่างกู้คืน
+
 ```bash
 docker compose up -d postgres
+docker compose stop app
 # 1) ฐานข้อมูล (ลบข้อมูลเดิมในฐานข้อมูล esm แล้วใส่ข้อมูลจากไฟล์สำรอง)
 docker compose exec -T postgres pg_restore -U esm -d esm --clean --if-exists < backup/esm-YYYY-MM-DD.dump
-# 2) ไฟล์เอกสาร
+# 2) ไฟล์เอกสาร: การแตกไฟล์ tar จะเขียนทับ/รวมเข้ากับไฟล์ที่มีอยู่แล้วใน volume
+#    ถ้าต้องการให้ตรงกับไฟล์สำรองเป๊ะ ให้ล้าง volume ก่อน (คำสั่งแรกด้านล่าง) แล้วจึงแตกไฟล์
+docker run --rm -v esm-project_files:/data/files alpine sh -c "find /data/files -mindepth 1 -delete"
 docker run --rm -v esm-project_files:/data/files -v "$PWD/backup":/backup alpine \
   sh -c "cd /data/files && tar xzf /backup/files-YYYY-MM-DD.tar.gz && chown -R 1001:1001 /data/files"
-docker compose up -d
+docker compose start app
 ```
+
+## ตรวจรับการติดตั้งครั้งแรก
+
+ขั้นตอนการติดตั้งแบบ Docker Compose บน network ปกติ และคำสั่งสำรอง/กู้คืนข้างต้น **ยังไม่เคยถูกรันจริงที่ใดเลย**
+(ตอนพัฒนาเครื่องที่ใช้ทดสอบสร้าง Docker network ไม่ได้ จึงทดสอบผ่าน `docker-compose.local.yml` เท่านั้น)
+ให้ทำรอบตรวจรับนี้หนึ่งครั้งบนเซิร์ฟเวอร์จริงก่อนใช้งานจริง:
+
+1. `docker compose up -d --build` แล้วตรวจว่า `curl -sI http://localhost:3000/login` ตอบ `200`
+2. รัน seed สร้างผู้ดูแลระบบ (`docker compose exec app npx tsx prisma/seed.ts`)
+3. เข้าสู่ระบบด้วย `admin`
+4. สร้างโครงการ (ระบุ PM)
+5. อัปโหลดไฟล์เวอร์ชัน 1.0 ให้เอกสารหนึ่งรายการ
+6. ดาวน์โหลดไฟล์นั้นกลับมาและตรวจว่าเนื้อหาตรงกัน
+7. สำรองข้อมูลตามหัวข้อ "สำรอง"
+8. กู้คืนตามหัวข้อ "กู้คืน" (ใช้ไฟล์สำรองที่เพิ่งสร้าง)
+9. ดาวน์โหลดไฟล์เดิมอีกครั้งและตรวจว่ายังตรงกัน
+
+## การให้บริการผ่าน HTTPS
+
+reverse proxy ต้องส่งหัว `Host` (หรือ `X-Forwarded-Host`) ของโดเมนจริงมายังแอป มิฉะนั้น Server Actions ของ Next.js
+จะปฏิเสธคำขอ (หรือกำหนด `serverActions.allowedOrigins` ใน `next.config`) และต้องตั้ง `SESSION_COOKIE_SECURE=true` ใน `.env`
 
 ## อัปเดตเป็นเวอร์ชันใหม่
 

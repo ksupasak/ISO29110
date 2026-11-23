@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-export const MAX_FILE_BYTES = 50 * 1024 * 1024;
+import { MAX_FILE_BYTES } from "@/lib/upload-limits";
+
+export { MAX_FILE_BYTES };
 
 /** Read at call time so tests can point it elsewhere. */
 function root(): string {

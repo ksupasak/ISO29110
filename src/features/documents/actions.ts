@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { AttachmentKind } from "@prisma/client";
 import { requireUser } from "@/lib/auth/current-user";
 import { formText } from "@/lib/form";
-import { MAX_FILE_BYTES } from "@/lib/storage";
+import { FILE_TOO_LARGE_MESSAGE, MAX_FILE_BYTES } from "@/lib/upload-limits";
 import { addAttachment, setDocumentStatus, uploadVersion } from "./service";
 
 /** `values` echoes the submitted text fields so the dialog can repopulate after an error. */
@@ -24,7 +24,7 @@ function toState(r: Result, values?: Record<string, string>): DocFormState {
 async function readFile(formData: FormData): Promise<{ fileName: string; mime: string; data: Buffer } | string> {
   const f = formData.get("file");
   if (!(f instanceof File) || f.size === 0) return "ไฟล์ว่างเปล่า";
-  if (f.size > MAX_FILE_BYTES) return "ไฟล์ใหญ่เกิน 50 MB";
+  if (f.size > MAX_FILE_BYTES) return FILE_TOO_LARGE_MESSAGE;
   return { fileName: f.name, mime: f.type || "application/octet-stream", data: Buffer.from(await f.arrayBuffer()) };
 }
 

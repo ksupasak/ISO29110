@@ -4,6 +4,7 @@ import { can, getActor } from "@/lib/authz";
 import { formatThaiDate } from "@/lib/dates";
 import { ATTACHMENT_KIND_LABEL } from "@/lib/labels";
 import { getProjectByCode } from "@/features/projects/service";
+import { isFinalStatus } from "@/lib/wp-catalog";
 import { listDocuments } from "@/features/documents/service";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,7 +35,11 @@ export default async function DocumentsPage({ params }: PageProps<"/projects/[co
           <CardContent className="divide-y">
             {items.map((item) => {
               const label = `${pad(item.wp.seq)} · ${item.wp.code} ${item.wp.name}`;
-              const options = ["Draft", ...item.wp.states].filter((s) => s !== "Baselined" || canBaseline || item.status === "Baselined");
+              // Final statuses (and leaving one) are for roles with document.baseline only.
+              const locked = !canBaseline && isFinalStatus(item.status);
+              const options = ["Draft", ...item.wp.states].filter(
+                (s) => s === item.status || canBaseline || !isFinalStatus(s),
+              );
               return (
                 <div key={item.id} data-testid="wp-row" className="space-y-2 py-3">
                   <div className="flex flex-wrap items-center gap-2">
@@ -45,7 +50,7 @@ export default async function DocumentsPage({ params }: PageProps<"/projects/[co
                     </span>
                     {item.wp.generated && <Badge variant="outline">ระบบสร้างให้</Badge>}
                     <span className="ml-auto flex flex-wrap items-center gap-2">
-                      {canSetStatus && (
+                      {canSetStatus && !locked && (
                         <StatusSelect projectId={project.id} wpCode={item.wp.code} status={item.status} options={options} />
                       )}
                       {canUpload && <UploadVersionDialog projectId={project.id} wpCode={item.wp.code} label={label} />}

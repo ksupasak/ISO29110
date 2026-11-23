@@ -12,7 +12,8 @@ async function main() {
     const passwordHash = await hashPassword(password);
     await prisma.user.upsert({
       where: { username: "admin" },
-      update: { passwordHash, systemRole: "ADMIN", active: true },
+      // An existing admin is left untouched unless the operator explicitly asks for a reset.
+      update: process.env.SEED_RESET_ADMIN === "true" ? { passwordHash, systemRole: "ADMIN", active: true } : {},
       create: { username: "admin", passwordHash, fullName: "ผู้ดูแลระบบ", systemRole: "ADMIN" },
     });
     await prisma.setting.upsert({
