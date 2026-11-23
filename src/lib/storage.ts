@@ -6,7 +6,7 @@ export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
 /** Read at call time so tests can point it elsewhere. */
 function root(): string {
-  return path.resolve(/*turbopackIgnore: true*/ process.env.FILE_STORAGE_DIR ?? "./storage");
+  return path.resolve(/*turbopackIgnore: true*/ process.env.FILE_STORAGE_DIR || "./storage");
 }
 
 /** Resolve a storage-relative path, refusing anything that lands outside the storage root. */

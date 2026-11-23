@@ -3,7 +3,7 @@ import type { ProjectRole, SystemRole, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { resetDb, countStoredFiles } from "./setup/db";
 import { createProject } from "@/features/projects/service";
-import { addAttachment, listDocuments, setDocumentStatus, uploadVersion } from "@/features/documents/service";
+import { addAttachment, compareVersions, listDocuments, setDocumentStatus, uploadVersion } from "@/features/documents/service";
 import { MAX_FILE_BYTES } from "@/lib/storage";
 import { WP_CATALOG } from "@/lib/wp-catalog";
 import { createSession, SESSION_COOKIE } from "@/lib/auth/session";
@@ -48,6 +48,18 @@ describe("uploadVersion", () => {
     expect(d.currentVersion).toBe("1.0");
     const att = await prisma.attachment.findFirstOrThrow({ where: { projectId: project.id } });
     expect(att).toMatchObject({ entityType: "WpDocument", entityId: d.id, kind: "OTHER", fileName: "แผน.docx", size: 1, uploadedById: pm.id });
+  });
+
+  test("current version is the highest uploaded, compared numerically", async () => {
+    const cur = async (wp: string) =>
+      (await prisma.wpDocument.findUniqueOrThrow({ where: { projectId_wpCode: { projectId: project.id, wpCode: wp } } })).currentVersion;
+    await up({ version: "2.0" });
+    await up({ version: "1.1" });
+    expect(await cur("WP10")).toBe("2.0");
+    const other = (v: string) => uploadVersion(pm, project.id, "WP02", { version: v, fileName: "a.docx", mime: DOCX, data: Buffer.from("a") });
+    await other("1.9");
+    await other("1.10");
+    expect(await cur("WP02")).toBe("1.10");
   });
 
   test("duplicate version rejected and leaves no orphan file", async () => {
@@ -184,5 +196,16 @@ describe("GET /api/files/[id]", () => {
       expect(await res.text()).toBe("");
     }
     expect((await download(admin, id)).status).toBe(200);
+  });
+});
+
+describe("compareVersions", () => {
+  test("compares dot-separated parts numerically", () => {
+    expect(compareVersions("1.10", "1.9")).toBeGreaterThan(0);
+    expect(compareVersions("2.0", "1.10")).toBeGreaterThan(0);
+    expect(compareVersions("1.0", "1.0")).toBe(0);
+    expect(compareVersions("1.0", "1.0.0")).toBe(0);
+    expect(compareVersions("1.0", "1.0.1")).toBeLessThan(0);
+    expect(compareVersions("1.9", "1.10")).toBeLessThan(0);
   });
 });

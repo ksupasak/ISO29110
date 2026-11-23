@@ -29,6 +29,26 @@ function knownWp(wpCode: string): WpDef | null {
   }
 }
 
+/** Numeric comparison per dot-separated part (missing parts count as 0): 1.10 > 1.9, 2.0 > 1.10. */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+/** Best-effort cleanup: a failure here must never replace the original error or result. */
+async function discardFile(storedPath: string): Promise<void> {
+  try {
+    await deleteFile(storedPath);
+  } catch {
+    // ignore
+  }
+}
+
 function checkFile(data: Buffer): string | null {
   if (data.length === 0) return "ไฟล์ว่างเปล่า";
   if (data.length > MAX_FILE_BYTES) return "ไฟล์ใหญ่เกิน 50 MB";
@@ -81,12 +101,15 @@ export async function uploadVersion(
           uploadedById: user.id,
         },
       });
-      await tx.wpDocument.update({ where: { id: doc.id }, data: { currentVersion: version } });
+      const cur = await tx.wpDocument.findUniqueOrThrow({ where: { id: doc.id }, select: { currentVersion: true } });
+      if (!cur.currentVersion || compareVersions(version, cur.currentVersion) > 0) {
+        await tx.wpDocument.update({ where: { id: doc.id }, data: { currentVersion: version } });
+      }
       return v;
     });
     return ok(created);
   } catch (e) {
-    await deleteFile(saved.storedPath);
+    await discardFile(saved.storedPath);
     if (isUniqueViolation(e)) return fail("เวอร์ชันนี้มีอยู่แล้ว");
     throw e;
   }
@@ -137,7 +160,7 @@ export async function addAttachment(
     });
     return ok({ id: a.id });
   } catch (e) {
-    await deleteFile(saved.storedPath);
+    await discardFile(saved.storedPath);
     throw e;
   }
 }
