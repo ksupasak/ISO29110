@@ -133,8 +133,9 @@ body {
   height: 7rem;
 }
 
-// Dense tables inside cards
-.card .table {
+// Dense tables inside cards (and standalone with .table-dense)
+.card .table,
+.table-dense {
   --bs-table-bg: transparent;
   margin-bottom: 0;
 
@@ -326,3 +327,118 @@ body {
 }
 
 .text-pre-wrap { white-space: pre-wrap; }
+
+// Document store: phase accordion, WP rows, file links
+.accordion-phases {
+  --bs-accordion-border-width: 0;
+  --bs-accordion-btn-padding-y: .875rem;
+  --bs-accordion-btn-padding-x: 1.25rem;
+  --bs-accordion-btn-color: #{$primary};
+  --bs-accordion-active-color: #{$primary};
+  --bs-accordion-active-bg: #{rgba($primary, .05)};
+  --bs-accordion-btn-focus-box-shadow: 0 0 0 .2rem #{rgba($primary, .2)};
+  --bs-accordion-btn-icon-width: 1rem;
+  display: grid;
+  gap: 1rem;
+
+  .accordion-item {
+    overflow: hidden;
+    background-color: $white;
+    border-radius: $border-radius-lg;
+    box-shadow: $elevation-1;
+  }
+
+  .accordion-button {
+    font-weight: 600;
+  }
+
+  .accordion-button:not(.collapsed) {
+    box-shadow: inset 0 -1px 0 $border-color;
+  }
+
+  .accordion-button:focus {
+    box-shadow: var(--bs-accordion-btn-focus-box-shadow);
+  }
+}
+
+.phase-title {
+  min-width: 0;
+}
+
+.wp-row {
+  & + & { border-top: 1px solid $border-color; }
+}
+
+.wp-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .625rem 1rem;
+  padding: .75rem 1.25rem;
+}
+
+.wp-row-info {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.wp-row-title {
+  font-weight: 500;
+}
+
+.wp-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .25rem .75rem;
+  margin-top: .25rem;
+}
+
+.wp-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+}
+
+.wp-row-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: .125rem;
+  padding: .125rem .5rem .125rem .25rem;
+  font-size: .8125rem;
+  font-weight: 500;
+  color: $primary;
+  background: transparent;
+  border: 0;
+  border-radius: $border-radius-pill;
+
+  &:hover { background-color: rgba($primary, .08); }
+  &:focus-visible { outline: 2px solid $primary; outline-offset: 1px; }
+  .material-symbols-outlined { font-size: 1.25rem; }
+}
+
+.wp-row-detail {
+  display: grid;
+  gap: .75rem;
+  padding: .75rem 1.25rem 1rem;
+  background-color: $gray-100;
+  border-top: 1px solid $border-color;
+
+  .table-dense > :not(caption) > * > * {
+    padding: .375rem .75rem;
+    background-color: transparent;
+  }
+
+  .table-dense > thead th { background-color: transparent; }
+}
+
+.file-link {
+  display: inline-block;
+  max-width: min(20rem, 60vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}

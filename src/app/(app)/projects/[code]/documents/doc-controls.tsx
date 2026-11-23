@@ -3,12 +3,9 @@
 import { useState, useTransition } from "react";
 import { addAttachmentAction, setStatusAction, uploadVersionAction } from "@/features/documents/actions";
 import { FormDialog } from "@/components/form-dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FileField, FloatingField, FloatingSelect } from "@/components/form-fields";
 import { ATTACHMENT_KIND_LABEL } from "@/lib/labels";
 import { FILE_TOO_LARGE_MESSAGE, MAX_FILE_BYTES } from "@/lib/upload-limits";
-
-const SELECT_CLASS = "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
 
 type FormState = Awaited<ReturnType<typeof uploadVersionAction>>;
 
@@ -30,23 +27,14 @@ const attachWithCheck = withSizeCheck(addAttachmentAction, ["kind"]);
 
 export function UploadVersionDialog({ projectId, wpCode, label }: { projectId: string; wpCode: string; label: string }) {
   return (
-    <FormDialog title={`อัปโหลดเวอร์ชันใหม่ ${label}`} trigger="อัปโหลดเวอร์ชันใหม่" action={uploadWithCheck} submitLabel="อัปโหลด">
+    <FormDialog title={`อัปโหลดเวอร์ชันใหม่ ${label}`} trigger="อัปโหลดเวอร์ชันใหม่" action={uploadWithCheck} submitLabel="อัปโหลด" triggerIcon="upload_file">
       {(v) => (
         <>
           <input type="hidden" name="projectId" value={projectId} />
           <input type="hidden" name="wpCode" value={wpCode} />
-          <div className="space-y-1">
-            <Label htmlFor={`version-${wpCode}`}>เวอร์ชัน (เช่น 1.0)</Label>
-            <Input id={`version-${wpCode}`} name="version" required defaultValue={v.version} placeholder="1.0" />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor={`note-${wpCode}`}>หมายเหตุ</Label>
-            <Input id={`note-${wpCode}`} name="note" defaultValue={v.note} />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor={`file-${wpCode}`}>ไฟล์ (ไม่เกิน 50 MB)</Label>
-            <Input id={`file-${wpCode}`} name="file" type="file" required />
-          </div>
+          <FloatingField id={`version-${wpCode}`} name="version" label="เวอร์ชัน (เช่น 1.0)" required defaultValue={v.version} placeholder="1.0" />
+          <FloatingField id={`note-${wpCode}`} name="note" label="หมายเหตุ" defaultValue={v.note} />
+          <FileField id={`file-${wpCode}`} name="file" label="ไฟล์ (ไม่เกิน 50 MB)" required />
         </>
       )}
     </FormDialog>
@@ -55,23 +43,17 @@ export function UploadVersionDialog({ projectId, wpCode, label }: { projectId: s
 
 export function AttachEvidenceDialog({ projectId, entityId, wpCode }: { projectId: string; entityId: string; wpCode: string }) {
   return (
-    <FormDialog title={`แนบหลักฐาน ${wpCode}`} trigger="แนบหลักฐาน" action={attachWithCheck} submitLabel="แนบไฟล์">
+    <FormDialog title={`แนบหลักฐาน ${wpCode}`} trigger="แนบหลักฐาน" action={attachWithCheck} submitLabel="แนบไฟล์" triggerIcon="attach_file">
       {(v) => (
         <>
           <input type="hidden" name="projectId" value={projectId} />
           <input type="hidden" name="entityId" value={entityId} />
-          <div className="space-y-1">
-            <Label htmlFor={`kind-${wpCode}`}>ประเภท</Label>
-            <select id={`kind-${wpCode}`} name="kind" defaultValue={v.kind ?? "SIGNED"} className={SELECT_CLASS}>
-              {(Object.keys(ATTACHMENT_KIND_LABEL) as (keyof typeof ATTACHMENT_KIND_LABEL)[]).map((k) => (
-                <option key={k} value={k}>{ATTACHMENT_KIND_LABEL[k]}</option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor={`attfile-${wpCode}`}>ไฟล์ (ไม่เกิน 50 MB)</Label>
-            <Input id={`attfile-${wpCode}`} name="file" type="file" required />
-          </div>
+          <FloatingSelect id={`kind-${wpCode}`} name="kind" label="ประเภท" defaultValue={v.kind ?? "SIGNED"}>
+            {(Object.keys(ATTACHMENT_KIND_LABEL) as (keyof typeof ATTACHMENT_KIND_LABEL)[]).map((k) => (
+              <option key={k} value={k}>{ATTACHMENT_KIND_LABEL[k]}</option>
+            ))}
+          </FloatingSelect>
+          <FileField id={`attfile-${wpCode}`} name="file" label="ไฟล์ (ไม่เกิน 50 MB)" required />
         </>
       )}
     </FormDialog>
@@ -93,12 +75,12 @@ export function StatusSelect({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   return (
-    <span className="inline-flex items-center gap-2">
+    <span className="d-inline-flex align-items-center gap-2">
       <select
         aria-label={`สถานะ ${wpCode}`}
         value={status}
         disabled={pending}
-        className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+        className="form-select form-select-sm w-auto"
         onChange={(e) => {
           const next = e.target.value;
           startTransition(async () => {
@@ -111,7 +93,7 @@ export function StatusSelect({
           <option key={s} value={s}>{s}</option>
         ))}
       </select>
-      {error && <span role="alert" className="text-xs text-destructive">{error}</span>}
+      {error && <span role="alert" className="text-danger small">{error}</span>}
     </span>
   );
 }
