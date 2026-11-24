@@ -34,6 +34,7 @@ services:
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
       SEED_RESET_ADMIN: ${SEED_RESET_ADMIN:-}
+      SETTINGS_SECRET: ${SETTINGS_SECRET:-}
     volumes:
       - files:/data/files
 
