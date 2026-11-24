@@ -162,7 +162,8 @@ test("Release 2A: plan, traceability, template download, own password", async ({
   await page.getByRole("link", { name: "Template", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/templates$/);
   await expect(page.getByTestId("templates-dir")).toContainText("templates");
-  await expect(page.locator("tbody tr")).toHaveCount(23);
+  // the WP table; the tag reference card below it has its own table
+  await expect(page.locator("table").first().locator("tbody tr")).toHaveCount(23);
   await expect(page.getByText("ยังไม่มี template")).toHaveCount(0);
   await logout(page, "ผู้ดูแลระบบ");
 

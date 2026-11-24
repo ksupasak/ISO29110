@@ -1,7 +1,9 @@
 import fs from "node:fs/promises";
 import { SESSION_COOKIE, getSessionUser } from "@/lib/auth/session";
 import { encodeRFC5987, readCookie } from "@/lib/http";
-import { resolveTemplateFile } from "@/lib/template-store";
+import { TemplateError } from "@/lib/docfill";
+import { resolveTemplateFile, scanTemplates } from "@/lib/template-store";
+import { GENERATED_WPS, fillGenerated, templateErrorText } from "@/features/docgen/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,19 @@ export async function GET(request: Request, ctx: { params: Promise<{ wp: string;
     return notFound();
   }
   const base = file.slice(file.lastIndexOf("/") + 1);
+  // A generated WP's template carries tags; hand it out filled with blank values so people can fill it by hand.
+  const generated = GENERATED_WPS[wp];
+  if (generated && base === (await scanTemplates()).get(wp)?.template) {
+    try {
+      data = fillGenerated(wp, data, generated.blank);
+    } catch (e) {
+      if (!(e instanceof TemplateError)) throw e;
+      return new Response(templateErrorText(wp, e), {
+        status: 422,
+        headers: { "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store" },
+      });
+    }
+  }
   const ext = base.includes(".") ? base.slice(base.lastIndexOf(".")).toLowerCase() : "";
   return new Response(new Uint8Array(data), {
     headers: {

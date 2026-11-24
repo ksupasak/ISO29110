@@ -8,6 +8,12 @@ describe("navSections", () => {
     expect(labels("/", false)[0]).toEqual(["โครงการ"]);
   });
 
+  test("การประชุม uses the groups icon and comes right after การอ้างอิง", () => {
+    const links = navSections("/projects/ABC-1", false)[1].links;
+    expect(links.at(-1)).toMatchObject({ label: "การประชุม", icon: "groups" });
+    expect(links.at(-2)?.label).toBe("การอ้างอิง");
+  });
+
   test("project section is present for the project overview and its documents", () => {
     for (const path of ["/projects/ABC-1", "/projects/ABC-1/documents", "/projects/ABC-1/plan/T-001"]) {
       const sections = navSections(path, false);
@@ -20,6 +26,7 @@ describe("navSections", () => {
         ["Requirement", "/projects/ABC-1/requirements"],
         ["Component", "/projects/ABC-1/components"],
         ["การอ้างอิง", "/projects/ABC-1/trace"],
+        ["การประชุม", "/projects/ABC-1/meetings"],
       ]);
     }
   });
@@ -34,6 +41,8 @@ describe("navSections", () => {
     expect(active("/projects/ABC-1/requirements/REQ-F01")).toEqual(["Requirement"]);
     expect(active("/projects/ABC-1/components/C01")).toEqual(["Component"]);
     expect(active("/projects/ABC-1/trace")).toEqual(["การอ้างอิง"]);
+    expect(active("/projects/ABC-1/meetings")).toEqual(["การประชุม"]);
+    expect(active("/projects/ABC-1/meetings/MR-2569-01")).toEqual(["การประชุม"]);
   });
 
   test("project section is absent for the create page, which activates the project list", () => {
@@ -44,7 +53,7 @@ describe("navSections", () => {
 
   test("a URL-encoded code is kept as-is in hrefs", () => {
     const hrefs = navSections("/projects/INT%2F2569", false)[1].links.map((l) => l.href);
-    expect(hrefs).toEqual(["/projects/INT%2F2569", "/projects/INT%2F2569/documents", "/projects/INT%2F2569/plan", "/projects/INT%2F2569/requirements", "/projects/INT%2F2569/components", "/projects/INT%2F2569/trace"]);
+    expect(hrefs).toEqual(["/projects/INT%2F2569", "/projects/INT%2F2569/documents", "/projects/INT%2F2569/plan", "/projects/INT%2F2569/requirements", "/projects/INT%2F2569/components", "/projects/INT%2F2569/trace", "/projects/INT%2F2569/meetings"]);
   });
 });
 
@@ -126,6 +135,20 @@ describe("breadcrumbs", () => {
       { label: "การอ้างอิง" },
     ]);
     expect(breadcrumbs("/projects/ABC-1/components/C01").at(-1)).toEqual({ label: "C01" });
+  });
+
+  test("meeting list and meeting detail", () => {
+    expect(breadcrumbs("/projects/ABC-1/meetings")).toEqual([
+      { label: "โครงการ", href: "/" },
+      { label: "ABC-1", href: "/projects/ABC-1" },
+      { label: "การประชุม" },
+    ]);
+    expect(breadcrumbs("/projects/ABC-1/meetings/MR-2569-01")).toEqual([
+      { label: "โครงการ", href: "/" },
+      { label: "ABC-1", href: "/projects/ABC-1" },
+      { label: "การประชุม", href: "/projects/ABC-1/meetings" },
+      { label: "MR-2569-01" },
+    ]);
   });
 
   test("a URL-encoded code is decoded for the label and kept encoded in the link", () => {

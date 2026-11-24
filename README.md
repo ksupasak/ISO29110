@@ -171,6 +171,26 @@ docker compose up -d --build
 
 Docker: image มี `templates-default/` อยู่แล้ว (`TEMPLATES_DEFAULT_DIR=/app/templates-default`) และ `docker-compose.yml` mount `./templates` ของเครื่อง host เข้า `/data/templates` แบบอ่านอย่างเดียว (`TEMPLATES_DIR` ใน container ถูกกำหนดโดย `docker-compose.yml` ไม่ต้องตั้งใน `.env`) ไฟล์และโฟลเดอร์ใน `templates/` ต้องอ่านได้โดย uid 1001 (ผู้ใช้ `app` ใน container) เช่น `chmod -R a+rX templates`
 
+## เอกสารที่ระบบสร้างจาก template
+
+รุ่นนี้ระบบสร้างเอกสาร **WP07 Meeting Record** (บันทึกการประชุม) จากไฟล์ template ของ WP07 โดยเติมข้อมูลจากหน้า `การประชุม` ของโครงการ
+
+- ปุ่ม `ส่งออก docx` ในหน้าการประชุม: การประชุมที่เป็น Draft จะเติม template ใหม่ทุกครั้ง; เมื่อ PM กด `อนุมัติ` ระบบเติมแล้วเก็บไฟล์ไว้เป็นฉบับอนุมัติ การส่งออกหลังจากนั้นได้ไฟล์เดิมทุกไบต์ ไม่เปลี่ยนตาม template หรือสถานะ Task ที่แก้ภายหลัง (กด `กลับเป็น Draft` แล้วอนุมัติใหม่เพื่อสร้างฉบับใหม่)
+- ปุ่ม `ดาวน์โหลด template` ของ WP07 ในหน้าเอกสารส่งไฟล์ที่เติมค่าว่างแล้ว (ตารางมีแถวเปล่า 3 แถว) สำหรับกรอกมือ
+
+วิธีแก้ template ของ WP ที่ระบบสร้าง:
+
+1. คัดลอก `templates-default/02_…/05_WP07_Meeting Record/WP07_meeting_record.docx` ไปไว้ที่ `templates/<โฟลเดอร์ที่ชื่อมี WP07>/` แล้วแก้ใน Word ได้ตามต้องการ (โลโก้ ชื่อบริษัท รูปแบบตัวอักษร)
+2. คงเครื่องหมาย `{…}` ทุกตัวไว้ สะกดตรงตามเดิม และให้ทั้งเครื่องหมายมีรูปแบบตัวอักษรเดียวกัน
+3. เปิดหน้า `Template` (`/admin/templates`) คอลัมน์ `ผลตรวจ` ต้องเป็น `ผ่าน`; ถ้า `ไม่ผ่าน` จะแสดงชื่อเครื่องหมายที่หายไป สะกดผิด หรือปิดไม่ครบ แก้แล้วกด `ตรวจอีกครั้ง` รายชื่อเครื่องหมายทั้งหมดอยู่ในการ์ด `เครื่องหมายของ WP07 Meeting Record` ใต้ตาราง
+
+template ที่ตรวจไม่ผ่าน: การส่งออก การอนุมัติ และ `ดาวน์โหลด template` จะตอบข้อความภาษาไทยที่ระบุ WP07 และสาเหตุ ไม่ส่งไฟล์เสีย
+
+รูปแบบเครื่องหมาย (สองแบบ):
+
+- แถวตาราง: `{#attendees}` ในช่องแรกของแถวข้อมูลแถวเดียว … `{/attendees}` ในช่องสุดท้าย ระหว่างนั้นใช้ `{no}` `{name}` … ระบบทำซ้ำแถวนั้นตามจำนวนรายการ
+- ย่อหน้ารายการ (bullet): `{-w:p accomplished}{text}{/accomplished}` ในย่อหน้าเดียว ระบบทำซ้ำย่อหน้านั้นตามจำนวนรายการ
+
 ## สำหรับนักพัฒนา
 
 ต้องมี Node.js 22 และ Docker
@@ -207,7 +227,7 @@ UI ใช้ Bootstrap 5.3 + react-bootstrap พร้อมธีมสไต�
 - หน้าจอ: ใช้ `AppCard` + `PageHeader` เป็นโครงของทุกหน้า
 - ตาราง: ใช้รูปแบบตามขนาดจอเดียวกัน คือครอบด้วย `table-responsive`, ใส่ `table-actions` ที่คอลัมน์ปุ่มจัดการ (ติดขอบขวาเมื่อเลื่อนตาราง), ซ่อนคอลัมน์รองด้วย `d-none d-md-table-cell` และใส่ `text-nowrap` ที่เซลล์ชื่อ
 - ปุ่มในแถว: ใช้ `IconButton` พร้อม `aria-label`/`title` (ผ่าน prop `label`)
-- สีสถานะ: ใช้ `docStatusVariant` / `projectStatusVariant` กับ `StatusChip` (หรือ `DocStatusBadge`/`ProjectStatusBadge`) แทนการกำหนดสีเอง
+- สีสถานะ: ใช้ `docStatusVariant` / `projectStatusVariant` กับ `StatusChip` (หรือ `DocStatusBadge`/`ProjectStatusBadge`) แทนการกำหนดสีเอง; การประชุมใช้ `MeetingStatusBadge` และประเด็นค้างใช้ `OpenIssueStatusBadge`
 
 ### เครื่องที่สร้าง Docker network ใหม่ไม่ได้
 

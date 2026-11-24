@@ -299,6 +299,7 @@ export async function deleteTask(user: User, taskId: string): Promise<ActionResu
       children: { select: { code: true } },
       requirements: { select: { requirement: { select: { code: true } } } },
       components: { select: { component: { select: { code: true } } } },
+      meetingItems: { select: { meeting: { select: { code: true } } } },
     },
   });
   if (!stored) return fail(NO_TASK);
@@ -307,6 +308,7 @@ export async function deleteTask(user: User, taskId: string): Promise<ActionResu
     ...stored.children.map((c) => c.code),
     ...stored.requirements.map((r) => r.requirement.code),
     ...stored.components.map((c) => c.component.code),
+    ...new Set(stored.meetingItems.map((i) => i.meeting.code)),
   ];
   if (refs.length > 0) return inUse(refs);
   try {

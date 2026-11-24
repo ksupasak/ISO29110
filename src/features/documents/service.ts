@@ -4,6 +4,7 @@ import { can, getActor } from "@/lib/authz";
 import { fail, ok, type ActionResult } from "@/lib/result";
 import { deleteFile, saveFile } from "@/lib/storage";
 import { FILE_TOO_LARGE_MESSAGE, MAX_FILE_BYTES } from "@/lib/upload-limits";
+import { MEETING_ENTITY } from "@/features/meetings/service";
 import { PHASES, WP_CATALOG, getWp, isFinalStatus, type Phase, type WpDef } from "@/lib/wp-catalog";
 
 const FORBIDDEN = "ไม่มีสิทธิ์ดำเนินการ";
@@ -140,20 +141,26 @@ export async function addAttachment(
   input: { entityType: string; entityId: string; kind: AttachmentKind } & FileInput,
 ): Promise<ActionResult<{ id: string }>> {
   if (!can(await getActor(user, projectId), "attachment.add")) return fail(FORBIDDEN);
-  if (input.entityType !== WP_ENTITY) return fail("ไม่รองรับการแนบไฟล์กับรายการนี้");
+  if (input.entityType !== WP_ENTITY && input.entityType !== MEETING_ENTITY) {
+    return fail("ไม่รองรับการแนบไฟล์กับรายการนี้");
+  }
   if (!["EVIDENCE", "SIGNED", "OTHER"].includes(input.kind)) return fail("ประเภทไฟล์แนบไม่ถูกต้อง");
   const fileError = checkFile(input.data);
   if (fileError) return fail(fileError);
-  const doc = await prisma.wpDocument.findFirst({ where: { id: input.entityId, projectId }, select: { id: true } });
-  if (!doc) return fail("ไม่พบเอกสาร");
+  // Meetings take attachments whether Draft or Approved (signed copies arrive after approval).
+  const entity =
+    input.entityType === WP_ENTITY
+      ? await prisma.wpDocument.findFirst({ where: { id: input.entityId, projectId }, select: { id: true } })
+      : await prisma.meeting.findFirst({ where: { id: input.entityId, projectId }, select: { id: true } });
+  if (!entity) return fail(input.entityType === WP_ENTITY ? "ไม่พบเอกสาร" : "ไม่พบการประชุม");
 
   const saved = await saveFile(projectId, input.fileName, input.data);
   try {
     const a = await prisma.attachment.create({
       data: {
         projectId,
-        entityType: WP_ENTITY,
-        entityId: doc.id,
+        entityType: input.entityType,
+        entityId: entity.id,
         kind: input.kind,
         fileName: input.fileName,
         storedPath: saved.storedPath,

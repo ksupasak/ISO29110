@@ -233,6 +233,22 @@ describe("deleteTask", () => {
     expect(await deleteTask(pm, a.id)).toMatchObject({ ok: true });
   });
 
+  test("blocked while meeting items link to it, naming the meetings", async () => {
+    const a = await task(pm, pid);
+    const mk = (code: string) =>
+      prisma.meeting.create({ data: { projectId: pid, code, topic: "t", meetingDate: d("2026-12-01") } });
+    const m1 = await mk("MR-2569-02");
+    const m2 = await mk("MR-2569-01");
+    for (const m of [m1, m1, m2]) {
+      await prisma.meetingItem.create({
+        data: { meetingId: m.id, projectId: pid, kind: "OPEN_ISSUE", order: 1, text: "x", taskId: a.id },
+      });
+    }
+    expect(await deleteTask(pm, a.id)).toEqual({ ok: false, error: "ลบไม่ได้: ถูกอ้างจาก MR-2569-01, MR-2569-02" });
+    await prisma.meetingItem.updateMany({ where: { taskId: a.id }, data: { taskId: null } });
+    expect(await deleteTask(pm, a.id)).toMatchObject({ ok: true });
+  });
+
   test("a deleted code is not reused", async () => {
     const a = await task(pm, pid);
     await deleteTask(pm, a.id);

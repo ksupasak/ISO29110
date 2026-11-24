@@ -12,7 +12,9 @@ export type Action =
   | "attachment.add"
   | "plan.manage"
   | "trace.manage"
-  | "requirement.approve";
+  | "requirement.approve"
+  | "meeting.manage"
+  | "meeting.approve";
 
 /** `roles` null means the user is not a member of the project. */
 export type Actor = {
@@ -42,6 +44,8 @@ const RULES: Record<Action, readonly ProjectRole[]> = {
   "plan.manage": ["PM"],
   "trace.manage": ["AN", "TL"],
   "requirement.approve": ["TL", "PM"],
+  "meeting.manage": ["PM", "AN"],
+  "meeting.approve": ["PM"],
 };
 
 export function can(actor: Actor, action: Action): boolean {

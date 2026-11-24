@@ -23,8 +23,8 @@ export function ReferencePanel({
               <p className="small text-body-secondary mb-0">ไม่มี</p>
             ) : (
               <ul className="list-unstyled mb-0 d-grid gap-1">
-                {g.items.map((i) => (
-                  <li key={i.code}>
+                {g.items.map((i, idx) => (
+                  <li key={`${i.code}-${idx}`}>
                     <Link href={i.href} className="fw-medium me-2">{i.code}</Link>
                     <span>{i.text}</span>
                   </li>

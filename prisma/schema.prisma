@@ -34,21 +34,24 @@ enum AttachmentKind {
 }
 
 model User {
-  id           String            @id @default(cuid())
-  username     String            @unique
-  passwordHash String
-  fullName     String
-  position     String?
-  systemRole   SystemRole        @default(USER)
-  active       Boolean           @default(true)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  memberships  ProjectMember[]
-  sessions     Session[]
-  uploads      Attachment[]
-  versions     DocumentVersion[]
-  tasks        Task[]
-  components   Component[]
+  id                 String            @id @default(cuid())
+  username           String            @unique
+  passwordHash       String
+  fullName           String
+  position           String?
+  systemRole         SystemRole        @default(USER)
+  active             Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  memberships        ProjectMember[]
+  sessions           Session[]
+  uploads            Attachment[]
+  versions           DocumentVersion[]
+  tasks              Task[]
+  components         Component[]
+  approvedMeetings   Meeting[]
+  meetingAttendances MeetingAttendee[]
+  meetingItems       MeetingItem[]
 }
 
 model Session {
@@ -91,6 +94,9 @@ model Project {
   taskRequirements      TaskRequirement[]
   taskComponents        TaskComponent[]
   requirementComponents RequirementComponent[]
+  meetings              Meeting[]
+  meetingAttendees      MeetingAttendee[]
+  meetingItems          MeetingItem[]
 }
 
 model ProjectMember {
@@ -140,21 +146,22 @@ model DocumentVersion {
 }
 
 model Attachment {
-  id           String           @id @default(cuid())
-  projectId    String
-  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  entityType   String
-  entityId     String
-  kind         AttachmentKind   @default(OTHER)
-  fileName     String
-  storedPath   String
-  size         Int
-  mime         String
-  uploadedById String
-  uploadedBy   User             @relation(fields: [uploadedById], references: [id])
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  version      DocumentVersion?
+  id              String           @id @default(cuid())
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  entityType      String
+  entityId        String
+  kind            AttachmentKind   @default(OTHER)
+  fileName        String
+  storedPath      String
+  size            Int
+  mime            String
+  uploadedById    String
+  uploadedBy      User             @relation(fields: [uploadedById], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  version         DocumentVersion?
+  approvedMeeting Meeting?
 
   @@index([projectId, entityType, entityId])
 }
@@ -258,6 +265,7 @@ model Task {
   updatedAt    DateTime          @updatedAt
   requirements TaskRequirement[]
   components   TaskComponent[]
+  meetingItems MeetingItem[]
 
   @@unique([projectId, code])
   @@index([assigneeId])
@@ -358,4 +366,111 @@ model RequirementComponent {
   @@id([requirementId, componentId])
   @@index([componentId])
   @@index([projectId])
+}
+
+enum MeetingStatus {
+  DRAFT
+  APPROVED
+}
+
+enum MeetingItemKind {
+  ACCOMPLISHED
+  ISSUE
+  OPEN_ISSUE
+  AGREEMENT
+}
+
+enum OpenIssueStatus {
+  OPEN
+  CLOSED
+}
+
+/// Meeting Record (WP07). `code` is MR-<Buddhist year>-nn, issued once at creation.
+model Meeting {
+  id             String            @id @default(cuid())
+  projectId      String
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code           String
+  topic          String
+  meetingDate    DateTime          @db.Date
+  startTime      String?
+  endTime        String?
+  place          String?
+  recorder       String?
+  organizer      String?
+  purpose        String?
+  previousId     String?
+  previous       Meeting?          @relation("MeetingChain", fields: [previousId], references: [id], onDelete: NoAction)
+  nextMeetings   Meeting[]         @relation("MeetingChain")
+  previousNote   String?
+  nextTopic      String?
+  nextDate       DateTime?         @db.Date
+  nextStartTime  String?
+  nextEndTime    String?
+  nextPlace      String?
+  status         MeetingStatus     @default(DRAFT)
+  approvedAt     DateTime?
+  approvedById   String?
+  approvedBy     User?             @relation(fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedFileId String?           @unique
+  approvedFile   Attachment?       @relation(fields: [approvedFileId], references: [id], onDelete: SetNull)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  attendees      MeetingAttendee[]
+  items          MeetingItem[]
+
+  @@unique([projectId, code])
+  @@index([previousId])
+}
+
+model MeetingAttendee {
+  id           String   @id @default(cuid())
+  meetingId    String
+  meeting      Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order        Int
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fullName     String
+  position     String?
+  organization String?
+  projectRole  String?
+  present      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([meetingId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model MeetingItem {
+  id            String          @id @default(cuid())
+  meetingId     String
+  meeting       Meeting         @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  projectId     String
+  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind          MeetingItemKind
+  order         Int
+  text          String
+  ownerId       String?
+  owner         User?           @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerName     String?
+  dueDate       DateTime?       @db.Date
+  status        OpenIssueStatus @default(OPEN)
+  /// The spec's linked_type/linked_id: only tasks in this release.
+  taskId        String?
+  task          Task?           @relation(fields: [taskId], references: [id], onDelete: NoAction)
+  carriedFromId String?
+  carriedFrom   MeetingItem?    @relation("IssueCarry", fields: [carriedFromId], references: [id], onDelete: NoAction)
+  carriedTo     MeetingItem[]   @relation("IssueCarry")
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([meetingId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([carriedFromId])
+  @@index([ownerId])
 }

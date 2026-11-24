@@ -192,6 +192,25 @@ describe("addAttachment", () => {
     expect(await countStoredFiles(project.id)).toBe(0);
     expect(await prisma.attachment.count()).toBe(0);
   });
+
+  test("attaches to a meeting of the project, Draft or Approved; not to another project's meeting", async () => {
+    const day = new Date("2026-12-01T00:00:00.000Z");
+    const m = await prisma.meeting.create({ data: { projectId: project.id, code: "MR-2569-01", topic: "t", meetingDate: day } });
+    const meetingInput = (entityId: string) => input(entityId, { entityType: "meeting" });
+    expect((await addAttachment(pm, project.id, meetingInput(m.id))).ok).toBe(true);
+    await prisma.meeting.update({ where: { id: m.id }, data: { status: "APPROVED" } });
+    expect((await addAttachment(analyst, project.id, meetingInput(m.id))).ok).toBe(true);
+    expect(await addAttachment(viewer, project.id, meetingInput(m.id))).toEqual({ ok: false, error: "ไม่มีสิทธิ์ดำเนินการ" });
+    expect(await addAttachment(pm, project.id, meetingInput("nope"))).toEqual({ ok: false, error: "ไม่พบการประชุม" });
+    const other = await createProject(admin, { code: "DOC-003", name: "Other", pmUserId: pm.id });
+    if (!other.ok) throw new Error(other.error);
+    const foreign = await prisma.meeting.create({ data: { projectId: other.data.id, code: "MR-2569-01", topic: "t", meetingDate: day } });
+    expect(await addAttachment(pm, project.id, meetingInput(foreign.id))).toEqual({ ok: false, error: "ไม่พบการประชุม" });
+    const rows = await prisma.attachment.findMany({ where: { entityType: "meeting" } });
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.entityId === m.id && r.kind === "SIGNED")).toBe(true);
+    expect(await countStoredFiles(project.id)).toBe(2);
+  });
 });
 
 describe("GET /api/files/[id]", () => {

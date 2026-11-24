@@ -16,6 +16,8 @@ const ACTIONS: Action[] = [
   "plan.manage",
   "trace.manage",
   "requirement.approve",
+  "meeting.manage",
+  "meeting.approve",
 ];
 
 function actor(systemRole: "ADMIN" | "USER", roles: ProjectRole[] | null): Actor {
@@ -23,17 +25,17 @@ function actor(systemRole: "ADMIN" | "USER", roles: ProjectRole[] | null): Actor
 }
 
 // Every expected value is written out by hand, in ACTIONS order:
-// view, edit, manage, viewRate, upload, setStatus, baseline, attachment, plan, trace, approve
+// view, edit, manage, viewRate, upload, setStatus, baseline, attachment, plan, trace, approve, meeting, meetingApprove
 const CASES: [string, Actor, boolean[]][] = [
-  ["ADMIN", actor("ADMIN", null), [true, true, true, true, true, true, true, true, true, true, true]],
-  ["non-member", actor("USER", null), [false, false, false, false, false, false, false, false, false, false, false]],
-  ["PM", actor("USER", ["PM"]), [true, true, true, true, true, true, true, true, true, false, true]],
-  ["TL", actor("USER", ["TL"]), [true, false, false, false, true, true, true, true, false, true, true]],
-  ["AN", actor("USER", ["AN"]), [true, false, false, false, true, true, false, true, false, true, false]],
-  ["PR", actor("USER", ["PR"]), [true, false, false, false, true, true, false, true, false, false, false]],
-  ["QA", actor("USER", ["QA"]), [true, false, false, false, true, true, false, true, false, false, false]],
-  ["VIEWER", actor("USER", ["VIEWER"]), [true, false, false, false, false, false, false, false, false, false, false]],
-  ["PR+TL", actor("USER", ["PR", "TL"]), [true, false, false, false, true, true, true, true, false, true, true]],
+  ["ADMIN", actor("ADMIN", null), [true, true, true, true, true, true, true, true, true, true, true, true, true]],
+  ["non-member", actor("USER", null), [false, false, false, false, false, false, false, false, false, false, false, false, false]],
+  ["PM", actor("USER", ["PM"]), [true, true, true, true, true, true, true, true, true, false, true, true, true]],
+  ["TL", actor("USER", ["TL"]), [true, false, false, false, true, true, true, true, false, true, true, false, false]],
+  ["AN", actor("USER", ["AN"]), [true, false, false, false, true, true, false, true, false, true, false, true, false]],
+  ["PR", actor("USER", ["PR"]), [true, false, false, false, true, true, false, true, false, false, false, false, false]],
+  ["QA", actor("USER", ["QA"]), [true, false, false, false, true, true, false, true, false, false, false, false, false]],
+  ["VIEWER", actor("USER", ["VIEWER"]), [true, false, false, false, false, false, false, false, false, false, false, false, false]],
+  ["PR+TL", actor("USER", ["PR", "TL"]), [true, false, false, false, true, true, true, true, false, true, true, false, false]],
 ];
 
 describe.each(CASES)("can() for %s", (_name, a, expected) => {

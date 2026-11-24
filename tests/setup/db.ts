@@ -27,6 +27,8 @@ export function assertTestStorageDir(dir: string): void {
 export async function resetDb(): Promise<void> {
   assertTestDatabaseUrl(process.env.DATABASE_URL);
   assertTestStorageDir(storageDir());
+  // A test trigger (tests/meetings.test.ts) left behind by a killed run must not poison later runs.
+  await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS test_fail_attachment ON "Attachment"`);
   const tables = await prisma.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables
     WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
