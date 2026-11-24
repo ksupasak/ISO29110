@@ -1,6 +1,8 @@
 import { fail, type ActionResult } from "@/lib/result";
 
 export const DEFAULT_TIMEOUT_MS = 15_000;
+/** Claude is a remote service and the larger models can take longer to start answering. */
+export const ANTHROPIC_TIMEOUT_MS = 60_000;
 
 export const MSG = {
   timeout: "เชื่อมต่อไม่สำเร็จ: หมดเวลา",

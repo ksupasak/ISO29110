@@ -111,6 +111,45 @@ describe("saveAiSettings", () => {
     expect(r.ok).toBe(true);
   });
 
+  test("an empty Claude model defaults to claude-opus-5-5", async () => {
+    const r = await saveAiSettings({ ...base, provider: "anthropic", model: "", apiKey: "sk-ant-test-wxyz" });
+    expect(r.ok && r.data.model).toBe("claude-opus-5-5");
+  });
+
+  test("clearKey wins over a typed key", async () => {
+    await saveAiSettings({ ...base, apiKey: "sk-test-secretkey-abcd" });
+    const r = await saveAiSettings({ ...base, apiKey: "sk-test-newkey-zzzz", clearKey: true });
+    expect(r.ok && r.data.keyState).toBe("none");
+    expect(await prisma.setting.findUnique({ where: { key: "ai.apiKey" } })).toBeNull();
+  });
+
+  test("the stored key belongs to one provider: switching provider without a new key drops it", async () => {
+    await saveAiSettings({ ...base, provider: "anthropic", model: CLAUDE_MODELS[0], apiKey: "sk-ant-test-wxyz" });
+    const toLocal = await saveAiSettings({ ...base, provider: "local" });
+    expect(toLocal.ok && toLocal.data.keyState).toBe("none");
+    expect(await prisma.setting.findUnique({ where: { key: "ai.apiKey" } })).toBeNull();
+
+    await saveAiSettings({ ...base, provider: "local", apiKey: "sk-local-abcd" });
+    const toClaude = await saveAiSettings({ ...base, provider: "anthropic", model: CLAUDE_MODELS[0], enabled: true });
+    expect(toClaude.ok).toBe(false);
+    expect(await prisma.setting.findUnique({ where: { key: "ai.apiKey" } })).not.toBeNull(); // failed save writes nothing
+    const toClaudeOff = await saveAiSettings({ ...base, provider: "anthropic", model: CLAUDE_MODELS[0] });
+    expect(toClaudeOff.ok && toClaudeOff.data.keyState).toBe("none");
+  });
+
+  test("a new key typed while switching provider is kept", async () => {
+    await saveAiSettings({ ...base, apiKey: "sk-local-abcd" });
+    const r = await saveAiSettings({ ...base, provider: "anthropic", model: CLAUDE_MODELS[0], apiKey: "sk-ant-test-wxyz" });
+    expect(r.ok && r.data.keyHint).toBe("wxyz");
+  });
+
+  test("saving provider anthropic removes the stale baseUrl", async () => {
+    await saveAiSettings({ ...base });
+    expect(await prisma.setting.findUnique({ where: { key: "ai.baseUrl" } })).not.toBeNull();
+    await saveAiSettings({ ...base, provider: "anthropic", model: CLAUDE_MODELS[0] });
+    expect(await prisma.setting.findUnique({ where: { key: "ai.baseUrl" } })).toBeNull();
+  });
+
   test("nothing is written when validation fails", async () => {
     await saveAiSettings({ ...base, baseUrl: "ftp://x", apiKey: "sk-test-abcd" });
     expect(await prisma.setting.count()).toBe(0);

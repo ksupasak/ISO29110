@@ -1,4 +1,4 @@
-import { hasSecret, open, seal } from "@/lib/secret-box";
+import { hasSecret, open, PLACEHOLDER_SECRET, seal } from "@/lib/secret-box";
 
 const ORIGINAL = process.env.SETTINGS_SECRET;
 const SECRET = "unit-test-secret-0123456789";
@@ -49,6 +49,14 @@ describe("secret-box", () => {
     expect(() => seal("x")).toThrow();
     process.env.SETTINGS_SECRET = "exactly-16-chars";
     expect(hasSecret()).toBe(true);
+  });
+
+  test("the placeholder from .env.example is rejected, and matches the file", async () => {
+    const { readFileSync } = await import("node:fs");
+    expect(readFileSync(".env.example", "utf8")).toContain(`SETTINGS_SECRET=${PLACEHOLDER_SECRET}`);
+    process.env.SETTINGS_SECRET = PLACEHOLDER_SECRET;
+    expect(hasSecret()).toBe(false);
+    expect(() => seal("x")).toThrow();
   });
 
   test("open returns null when the secret is unset", () => {

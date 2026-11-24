@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/current-user";
 import { formText } from "@/lib/form";
 import { fail, type ActionResult } from "@/lib/result";
@@ -33,17 +34,22 @@ export async function testAiConnectionAction(): Promise<ActionResult<AiChatResul
 }
 
 /**
- * Lists models of the typed URL. The stored key is only used when the URL is the saved one,
+ * Lists models of the typed URL. The stored key is only used when the saved provider is local and the URL is the saved one,
  * so it is never sent to a host the admin merely typed.
  */
+const listArgs = z.tuple([z.string(), z.string()]);
+
 export async function listLocalModelsAction(baseUrl: string, typedKey: string): Promise<ActionResult<string[]>> {
   await requireAdmin();
-  const url = normalizeBaseUrl(baseUrl);
+  // Server action arguments come from the network: do not trust the TypeScript types.
+  const args = listArgs.safeParse([baseUrl, typedKey]);
+  if (!args.success) return fail("ข้อมูลที่ส่งมาไม่ถูกต้อง");
+  const url = normalizeBaseUrl(args.data[0]);
   if (url === null) return fail("URL ปลายทางต้องเป็น http:// หรือ https:// ที่ถูกต้อง");
-  let apiKey = typedKey.trim() || undefined;
+  let apiKey = args.data[1].trim() || undefined;
   if (!apiKey) {
     const saved = await loadAiConfig();
-    if (saved.apiKey && saved.baseUrl && normalizeBaseUrl(saved.baseUrl) === url) apiKey = saved.apiKey;
+    if (saved.provider === "local" && saved.apiKey && saved.baseUrl && normalizeBaseUrl(saved.baseUrl) === url) apiKey = saved.apiKey;
   }
   return listLocalModels(url, apiKey);
 }

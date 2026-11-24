@@ -219,6 +219,12 @@ describe("anthropic provider", () => {
     expect(String(beta)).toContain("server-side-fallback-2026-07-01");
   });
 
+  test("the default timeout is 60 s for Claude", async () => {
+    const { ANTHROPIC_TIMEOUT_MS, DEFAULT_TIMEOUT_MS } = await import("@/features/ai/providers/errors");
+    expect(ANTHROPIC_TIMEOUT_MS).toBe(60_000);
+    expect(DEFAULT_TIMEOUT_MS).toBe(15_000);
+  });
+
   test("a refusal stop reason gives the refusal message", async () => {
     reply = { status: 200, body: message({ content: [], stop_reason: "refusal" }) };
     expect(await claude().chat({ user: "hi" })).toEqual({ ok: false, error: "model ปฏิเสธคำขอ" });
@@ -277,6 +283,16 @@ describe("getAiClient / testAiConnection", () => {
     if (r.ok) expect(r.data.text).toBe("พร้อมใช้งาน");
     expect(seen[0].auth).toBe("Bearer sk-saved-wxyz");
     expect(JSON.parse(seen[0].body).messages.at(-1).content).toBe('ตอบคำว่า "พร้อมใช้งาน" เท่านั้น');
+  });
+
+  test("switching anthropic -> local with an empty key leaves the local chat without Authorization", async () => {
+    await saveAiSettings({ enabled: false, provider: "anthropic", baseUrl: "", model: "claude-opus-5-5", apiKey: "sk-ant-test-wxyz", clearKey: false });
+    await saveAiSettings({ enabled: true, provider: "local", baseUrl: `${base}/v1`, model: "llama3", apiKey: "", clearKey: false });
+    reply = { status: 200, body: completion("ok") };
+    const r = await testAiConnection();
+    expect(r.ok).toBe(true);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].auth).toBeUndefined();
   });
 
   test("an unreadable stored key is reported, not thrown", async () => {

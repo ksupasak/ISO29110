@@ -105,11 +105,14 @@ export async function saveAiSettings(input: AiSettingsInput): Promise<ActionResu
   const provider = parseProvider(input.provider);
   const newKey = input.clearKey ? "" : input.apiKey.trim();
   const model = input.model.trim();
-  const current = readKey(await readRaw());
+  const raw = await readRaw();
+  const current = readKey(raw);
+  // A stored key belongs to the provider it was saved for: switching provider without typing a new key drops it.
+  const providerChanged = parseProvider(raw[K.provider]) !== provider;
 
   if (newKey && !hasSecret()) return fail(NO_SECRET_ERROR);
 
-  let baseUrl: string | null = null; // null = leave the stored value alone
+  let baseUrl: string | null = null; // null = provider anthropic: the stored URL is removed
   if (provider === "local") {
     if (!input.baseUrl.trim()) return fail("กรุณากรอก URL ปลายทาง");
     baseUrl = normalizeBaseUrl(input.baseUrl);
@@ -124,7 +127,8 @@ export async function saveAiSettings(input: AiSettingsInput): Promise<ActionResu
     return fail("กรุณาระบุ model");
   }
 
-  const keyAfter = input.clearKey ? "none" : newKey ? "set" : current.state;
+  const dropKey = input.clearKey || (providerChanged && !newKey);
+  const keyAfter = newKey ? "set" : dropKey ? "none" : current.state;
   if (input.enabled && provider === "anthropic" && keyAfter !== "set") {
     return fail("Claude ต้องใช้ API key กรุณากรอก API key");
   }
@@ -135,7 +139,8 @@ export async function saveAiSettings(input: AiSettingsInput): Promise<ActionResu
     upsert(K.model, finalModel),
   ];
   if (baseUrl !== null) writes.push(upsert(K.baseUrl, baseUrl));
-  if (input.clearKey) writes.push(prisma.setting.deleteMany({ where: { key: K.apiKey } }));
+  else writes.push(prisma.setting.deleteMany({ where: { key: K.baseUrl } }));
+  if (dropKey) writes.push(prisma.setting.deleteMany({ where: { key: K.apiKey } }));
   else if (newKey) writes.push(upsert(K.apiKey, seal(newKey)));
   await prisma.$transaction(writes);
 

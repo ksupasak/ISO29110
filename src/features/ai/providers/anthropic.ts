@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { fail, ok, type ActionResult } from "@/lib/result";
 import type { AiChatResult, AiClient } from "../client";
-import { DEFAULT_TIMEOUT_MS, hostOf, MSG, statusError, unreachable } from "./errors";
+import { ANTHROPIC_TIMEOUT_MS, hostOf, MSG, statusError, unreachable } from "./errors";
 
 const HAIKU = "claude-haiku-5-5";
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
@@ -18,7 +18,7 @@ export function createAnthropicClient(opts: { apiKey: string; model: string; bas
   const client = new Anthropic({
     apiKey: opts.apiKey,
     baseURL: opts.baseURL,
-    timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    timeout: opts.timeoutMs ?? ANTHROPIC_TIMEOUT_MS,
     maxRetries: 0,
   });
   return {

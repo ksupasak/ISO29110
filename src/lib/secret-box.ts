@@ -4,9 +4,13 @@ const MIN_SECRET_LENGTH = 16;
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 
-/** True when env SETTINGS_SECRET is set and long enough to derive an encryption key from. */
+/** The public example value in .env.example; a copied-unchanged .env must not encrypt with it. */
+export const PLACEHOLDER_SECRET = "change-me-settings-secret-min-16-chars";
+
+/** True when env SETTINGS_SECRET is set, long enough, and not the .env.example placeholder. */
 export function hasSecret(): boolean {
-  return (process.env.SETTINGS_SECRET ?? "").length >= MIN_SECRET_LENGTH;
+  const secret = process.env.SETTINGS_SECRET ?? "";
+  return secret.length >= MIN_SECRET_LENGTH && secret !== PLACEHOLDER_SECRET;
 }
 
 function key(): Buffer {

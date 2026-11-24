@@ -173,7 +173,7 @@ export function AiSettingsForm({ view: initial, secretReady }: { view: AiSetting
             </Button>
             {models.length > 0 && <span className="small text-body-secondary">พบ {models.length} model</span>}
           </div>
-          {listError && <div role="alert" className="alert alert-danger py-2 small mb-0">{listError}</div>}
+          {listError && <div role="alert" className="alert alert-danger py-2 small mb-3">{listError}</div>}
         </div>
       )}
 
