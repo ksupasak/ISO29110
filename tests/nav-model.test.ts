@@ -4,7 +4,7 @@ const labels = (path: string, isAdmin: boolean) => navSections(path, isAdmin).ma
 
 describe("navSections", () => {
   test("global links: admins also see users, non-admins do not", () => {
-    expect(labels("/", true)[0]).toEqual(["โครงการ", "ผู้ใช้งาน", "ตั้งค่า AI"]);
+    expect(labels("/", true)[0]).toEqual(["โครงการ", "ผู้ใช้งาน", "ตั้งค่า AI", "Template"]);
     expect(labels("/", false)[0]).toEqual(["โครงการ"]);
   });
 
@@ -59,6 +59,16 @@ describe("AI settings entry", () => {
     const active = (path: string) => navSections(path, true)[0].links.filter((l) => l.active).map((l) => l.label);
     expect(active("/admin/ai")).toEqual(["ตั้งค่า AI"]);
     expect(active("/admin/users")).toEqual(["ผู้ใช้งาน"]);
+  });
+});
+
+describe("Template entry", () => {
+  test("admins see Template linking to /admin/templates, non-admins do not", () => {
+    const link = navSections("/", true)[0].links.find((l) => l.label === "Template");
+    expect(link).toMatchObject({ href: "/admin/templates", icon: "folder_copy", active: false });
+    expect(navSections("/", false)[0].links.some((l) => l.href === "/admin/templates")).toBe(false);
+    expect(navSections("/admin/templates", true)[0].links.filter((l) => l.active).map((l) => l.label)).toEqual(["Template"]);
+    expect(breadcrumbs("/admin/templates")).toEqual([{ label: "Template" }]);
   });
 });
 

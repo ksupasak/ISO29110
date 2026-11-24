@@ -6,6 +6,8 @@ import { ATTACHMENT_KIND_LABEL } from "@/lib/labels";
 import { getProjectByCode } from "@/features/projects/service";
 import { isFinalStatus } from "@/lib/wp-catalog";
 import { listDocuments } from "@/features/documents/service";
+import { scanTemplates } from "@/lib/template-store";
+import { Icon } from "@/components/icon";
 import { DocStatusBadge, StatusChip } from "@/components/status-badge";
 import { AttachEvidenceDialog, StatusSelect, UploadVersionDialog } from "./doc-controls";
 import { PhaseAccordion, PhaseItem, WpRow } from "./wp-accordion";
@@ -26,6 +28,7 @@ export default async function DocumentsPage({ params }: PageProps<"/projects/[co
   const canSetStatus = can(actor, "document.setStatus");
   const canBaseline = can(actor, "document.baseline");
   const phases = await listDocuments(user, project.id);
+  const templates = await scanTemplates();
 
   return (
     <PhaseAccordion phaseKeys={phases.map(({ phase }) => String(phase.no))}>
@@ -43,7 +46,11 @@ export default async function DocumentsPage({ params }: PageProps<"/projects/[co
             const options = ["Draft", ...item.wp.states].filter(
               (s) => s === item.status || canBaseline || !isFinalStatus(s),
             );
+            const tpl = templates.get(item.wp.code);
+            const samples = tpl?.samples ?? [];
+            const download = (name: string) => `/api/templates/${item.wp.code}/${encodeURIComponent(name)}`;
             const toggleParts = [
+              samples.length > 0 ? `ตัวอย่าง (${samples.length})` : null,
               item.versions.length > 0 ? `ประวัติเวอร์ชัน (${item.versions.length})` : null,
               item.attachments.length > 0 ? `ไฟล์แนบ (${item.attachments.length})` : null,
             ].filter((part): part is string => part !== null);
@@ -64,6 +71,12 @@ export default async function DocumentsPage({ params }: PageProps<"/projects/[co
                 }
                 actions={
                   <>
+                    {tpl?.template && (
+                      <a className="btn btn-outline-primary btn-sm" href={download(tpl.template)}>
+                        <Icon name="download" className="me-1" />
+                        ดาวน์โหลด template
+                      </a>
+                    )}
                     {canSetStatus && !locked && (
                       <StatusSelect projectId={project.id} wpCode={item.wp.code} status={item.status} options={options} />
                     )}
@@ -72,6 +85,16 @@ export default async function DocumentsPage({ params }: PageProps<"/projects/[co
                   </>
                 }
               >
+                {samples.length > 0 && (
+                  <ul className="list-unstyled small d-grid gap-2 wp-samples">
+                    <li className="fw-semibold">{`ตัวอย่าง (${samples.length})`}</li>
+                    {samples.map((name) => (
+                      <li key={name}>
+                        <a className="file-link" href={download(name)} title={name}>{name}</a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {item.versions.length > 0 && (
                   <div className="table-responsive">
                     <table className="table table-dense table-sm align-middle">
