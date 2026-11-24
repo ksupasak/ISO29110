@@ -89,7 +89,7 @@ export async function getAiSettingsView(): Promise<AiSettingsView> {
 }
 
 /** Trailing slashes stripped; null unless it parses as an http(s) URL. */
-function normalizeBaseUrl(input: string): string | null {
+export function normalizeBaseUrl(input: string): string | null {
   const trimmed = input.trim();
   let url: URL;
   try {

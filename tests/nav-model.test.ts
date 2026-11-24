@@ -4,7 +4,7 @@ const labels = (path: string, isAdmin: boolean) => navSections(path, isAdmin).ma
 
 describe("navSections", () => {
   test("global links: admins also see users, non-admins do not", () => {
-    expect(labels("/", true)[0]).toEqual(["โครงการ", "ผู้ใช้งาน"]);
+    expect(labels("/", true)[0]).toEqual(["โครงการ", "ผู้ใช้งาน", "ตั้งค่า AI"]);
     expect(labels("/", false)[0]).toEqual(["โครงการ"]);
   });
 
@@ -38,10 +38,25 @@ describe("navSections", () => {
   });
 });
 
+describe("AI settings entry", () => {
+  test("admins see ตั้งค่า AI linking to /admin/ai, non-admins do not", () => {
+    const link = navSections("/", true)[0].links.find((l) => l.label === "ตั้งค่า AI");
+    expect(link).toMatchObject({ href: "/admin/ai", icon: "smart_toy", active: false });
+    expect(navSections("/", false)[0].links.some((l) => l.href === "/admin/ai")).toBe(false);
+  });
+
+  test("is active only on /admin/ai", () => {
+    const active = (path: string) => navSections(path, true)[0].links.filter((l) => l.active).map((l) => l.label);
+    expect(active("/admin/ai")).toEqual(["ตั้งค่า AI"]);
+    expect(active("/admin/users")).toEqual(["ผู้ใช้งาน"]);
+  });
+});
+
 describe("breadcrumbs", () => {
   test("project list, users and create pages", () => {
     expect(breadcrumbs("/")).toEqual([{ label: "โครงการ" }]);
     expect(breadcrumbs("/admin/users")).toEqual([{ label: "ผู้ใช้งาน" }]);
+    expect(breadcrumbs("/admin/ai")).toEqual([{ label: "ตั้งค่า AI" }]);
     expect(breadcrumbs("/projects/new")).toEqual([{ label: "โครงการ", href: "/" }, { label: "สร้างโครงการ" }]);
   });
 

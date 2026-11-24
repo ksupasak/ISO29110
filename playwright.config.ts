@@ -26,6 +26,8 @@ export default defineConfig({
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
       FILE_STORAGE_DIR: E2E_STORAGE_DIR,
       SESSION_COOKIE_SECURE: "false",
+      // Test-only secret so the AI settings page can store an API key.
+      SETTINGS_SECRET: "e2e-settings-secret-0123456789",
       // Own build directory: never collide with a developer's `next dev` (which uses .next).
       NEXT_DIST_DIR: ".next-e2e",
     },

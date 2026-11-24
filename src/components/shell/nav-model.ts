@@ -29,6 +29,7 @@ export function navSections(pathname: string, isAdmin: boolean): NavSection[] {
   ];
   if (isAdmin) {
     main.push({ href: "/admin/users", label: "ผู้ใช้งาน", icon: "group", active: within(pathname, "/admin/users") });
+    main.push({ href: "/admin/ai", label: "ตั้งค่า AI", icon: "smart_toy", active: within(pathname, "/admin/ai") });
   }
   const sections: NavSection[] = [{ links: main }];
   if (code) {
@@ -47,6 +48,7 @@ export function navSections(pathname: string, isAdmin: boolean): NavSection[] {
 /** Breadcrumb trail for the topbar; the last crumb is the current page and carries no link. */
 export function breadcrumbs(pathname: string): Crumb[] {
   if (within(pathname, "/admin/users")) return [{ label: "ผู้ใช้งาน" }];
+  if (within(pathname, "/admin/ai")) return [{ label: "ตั้งค่า AI" }];
   if (within(pathname, "/projects/new")) return [{ label: "โครงการ", href: "/" }, { label: "สร้างโครงการ" }];
   const code = projectCode(pathname);
   if (!code) return [{ label: "โครงการ" }];
