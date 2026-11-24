@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 import type { ProjectRole } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { resetDb } from "./setup/db";
-import { assertCan, can, ForbiddenError, getActor, type Action, type Actor } from "@/lib/authz";
+import { assertCan, can, canUpdateTaskProgress, ForbiddenError, getActor, type Action, type Actor } from "@/lib/authz";
 
 const ACTIONS: Action[] = [
   "project.view",
@@ -13,6 +13,9 @@ const ACTIONS: Action[] = [
   "document.setStatus",
   "document.baseline",
   "attachment.add",
+  "plan.manage",
+  "trace.manage",
+  "requirement.approve",
 ];
 
 function actor(systemRole: "ADMIN" | "USER", roles: ProjectRole[] | null): Actor {
@@ -20,17 +23,17 @@ function actor(systemRole: "ADMIN" | "USER", roles: ProjectRole[] | null): Actor
 }
 
 // Every expected value is written out by hand, in ACTIONS order:
-// view, edit, manage, viewRate, upload, setStatus, baseline, attachment
+// view, edit, manage, viewRate, upload, setStatus, baseline, attachment, plan, trace, approve
 const CASES: [string, Actor, boolean[]][] = [
-  ["ADMIN", actor("ADMIN", null), [true, true, true, true, true, true, true, true]],
-  ["non-member", actor("USER", null), [false, false, false, false, false, false, false, false]],
-  ["PM", actor("USER", ["PM"]), [true, true, true, true, true, true, true, true]],
-  ["TL", actor("USER", ["TL"]), [true, false, false, false, true, true, true, true]],
-  ["AN", actor("USER", ["AN"]), [true, false, false, false, true, true, false, true]],
-  ["PR", actor("USER", ["PR"]), [true, false, false, false, true, true, false, true]],
-  ["QA", actor("USER", ["QA"]), [true, false, false, false, true, true, false, true]],
-  ["VIEWER", actor("USER", ["VIEWER"]), [true, false, false, false, false, false, false, false]],
-  ["PR+TL", actor("USER", ["PR", "TL"]), [true, false, false, false, true, true, true, true]],
+  ["ADMIN", actor("ADMIN", null), [true, true, true, true, true, true, true, true, true, true, true]],
+  ["non-member", actor("USER", null), [false, false, false, false, false, false, false, false, false, false, false]],
+  ["PM", actor("USER", ["PM"]), [true, true, true, true, true, true, true, true, true, false, true]],
+  ["TL", actor("USER", ["TL"]), [true, false, false, false, true, true, true, true, false, true, true]],
+  ["AN", actor("USER", ["AN"]), [true, false, false, false, true, true, false, true, false, true, false]],
+  ["PR", actor("USER", ["PR"]), [true, false, false, false, true, true, false, true, false, false, false]],
+  ["QA", actor("USER", ["QA"]), [true, false, false, false, true, true, false, true, false, false, false]],
+  ["VIEWER", actor("USER", ["VIEWER"]), [true, false, false, false, false, false, false, false, false, false, false]],
+  ["PR+TL", actor("USER", ["PR", "TL"]), [true, false, false, false, true, true, true, true, false, true, true]],
 ];
 
 describe.each(CASES)("can() for %s", (_name, a, expected) => {
@@ -42,6 +45,31 @@ describe.each(CASES)("can() for %s", (_name, a, expected) => {
 test("assertCan throws ForbiddenError for VIEWER uploading, passes for PM", () => {
   expect(() => assertCan(actor("USER", ["VIEWER"]), "document.upload")).toThrow(ForbiddenError);
   expect(() => assertCan(actor("USER", ["PM"]), "document.upload")).not.toThrow();
+});
+
+describe("canUpdateTaskProgress", () => {
+  const me = "me";
+  const as = (systemRole: "ADMIN" | "USER", roles: ProjectRole[] | null): Actor => ({
+    user: { id: me, systemRole },
+    roles,
+  });
+  test("PM and ADMIN may update any task", () => {
+    expect(canUpdateTaskProgress(as("USER", ["PM"]), { assigneeId: "other" })).toBe(true);
+    expect(canUpdateTaskProgress(as("USER", ["PM"]), { assigneeId: null })).toBe(true);
+    expect(canUpdateTaskProgress(as("ADMIN", null), { assigneeId: "other" })).toBe(true);
+  });
+  test("the assignee may update their own task", () => {
+    expect(canUpdateTaskProgress(as("USER", ["PR"]), { assigneeId: me })).toBe(true);
+    expect(canUpdateTaskProgress(as("USER", ["QA", "TL"]), { assigneeId: me })).toBe(true);
+  });
+  test("other members, unassigned tasks and non-members may not", () => {
+    expect(canUpdateTaskProgress(as("USER", ["PR"]), { assigneeId: "other" })).toBe(false);
+    expect(canUpdateTaskProgress(as("USER", ["TL"]), { assigneeId: null })).toBe(false);
+    expect(canUpdateTaskProgress(as("USER", null), { assigneeId: me })).toBe(false);
+  });
+  test("a VIEWER-only assignee may not", () => {
+    expect(canUpdateTaskProgress(as("USER", ["VIEWER"]), { assigneeId: me })).toBe(false);
+  });
 });
 
 describe("getActor", () => {

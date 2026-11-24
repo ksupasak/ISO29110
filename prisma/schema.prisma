@@ -47,6 +47,8 @@ model User {
   sessions     Session[]
   uploads      Attachment[]
   versions     DocumentVersion[]
+  tasks        Task[]
+  components   Component[]
 }
 
 model Session {
@@ -62,24 +64,33 @@ model Session {
 }
 
 model Project {
-  id              String          @id @default(cuid())
-  code            String          @unique
-  name            String
-  shortName       String?
-  customerName    String?
-  customerContact String?
-  type            String          @default("Internal")
-  startDate       DateTime?       @db.Date
-  endDate         DateTime?       @db.Date
-  budget          Decimal?        @db.Decimal(14, 2)
-  devCycle        String?
-  status          ProjectStatus   @default(PLANNING)
-  description     String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  members         ProjectMember[]
-  wpDocuments     WpDocument[]
-  attachments     Attachment[]
+  id                    String                 @id @default(cuid())
+  code                  String                 @unique
+  name                  String
+  shortName             String?
+  customerName          String?
+  customerContact       String?
+  type                  String                 @default("Internal")
+  startDate             DateTime?              @db.Date
+  endDate               DateTime?              @db.Date
+  budget                Decimal?               @db.Decimal(14, 2)
+  devCycle              String?
+  status                ProjectStatus          @default(PLANNING)
+  description           String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  members               ProjectMember[]
+  wpDocuments           WpDocument[]
+  attachments           Attachment[]
+  sequences             DocSequence[]
+  milestones            Milestone[]
+  tasks                 Task[]
+  agreementItems        AgreementItem[]
+  requirements          Requirement[]
+  components            Component[]
+  taskRequirements      TaskRequirement[]
+  taskComponents        TaskComponent[]
+  requirementComponents RequirementComponent[]
 }
 
 model ProjectMember {
@@ -153,4 +164,198 @@ model Setting {
   value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum TaskStatus {
+  TODO
+  DOING
+  DONE
+  BLOCKED
+}
+
+enum TaskKind {
+  PLAN
+  DEV
+  FIX
+  REVIEW
+}
+
+enum RequirementType {
+  FUNCTIONAL
+  NON_FUNCTIONAL
+}
+
+enum RequirementStatus {
+  PROPOSED
+  APPROVED
+  DROPPED
+}
+
+enum UnitTestStatus {
+  NOT_TESTED
+  PASSED
+  FAILED
+}
+
+/// Per project/prefix/year counter behind generated codes. `year` is 0 for codes without a year.
+model DocSequence {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  prefix    String
+  year      Int      @default(0)
+  lastNo    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, prefix, year])
+}
+
+model Milestone {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code        String
+  name        String
+  plannedDate DateTime? @db.Date
+  revisedDate DateTime? @db.Date
+  actualDate  DateTime? @db.Date
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tasks       Task[]
+
+  @@unique([projectId, code])
+}
+
+model Task {
+  id           String            @id @default(cuid())
+  projectId    String
+  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code         String
+  wbsCode      String?
+  parentId     String?
+  parent       Task?             @relation("TaskTree", fields: [parentId], references: [id], onDelete: NoAction)
+  children     Task[]            @relation("TaskTree")
+  title        String
+  kind         TaskKind          @default(DEV)
+  isoActivity  String?
+  qaType       String?
+  assigneeId   String?
+  assignee     User?             @relation(fields: [assigneeId], references: [id])
+  milestoneId  String?
+  milestone    Milestone?        @relation(fields: [milestoneId], references: [id], onDelete: NoAction)
+  plannedStart DateTime?         @db.Date
+  plannedEnd   DateTime?         @db.Date
+  actualStart  DateTime?         @db.Date
+  actualEnd    DateTime?         @db.Date
+  status       TaskStatus        @default(TODO)
+  percent      Int               @default(0)
+  plannedDays  Decimal?          @db.Decimal(6, 1)
+  actualDays   Decimal?          @db.Decimal(6, 1)
+  outputWp     String?
+  note         String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  requirements TaskRequirement[]
+  components   TaskComponent[]
+
+  @@unique([projectId, code])
+  @@index([assigneeId])
+  @@index([parentId])
+  @@index([milestoneId])
+}
+
+model AgreementItem {
+  id           String        @id @default(cuid())
+  projectId    String
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code         String
+  text         String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  requirements Requirement[]
+
+  @@unique([projectId, code])
+}
+
+model Requirement {
+  id              String                 @id @default(cuid())
+  projectId       String
+  project         Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code            String
+  type            RequirementType
+  text            String
+  priority        String?
+  agreementItemId String?
+  agreementItem   AgreementItem?         @relation(fields: [agreementItemId], references: [id], onDelete: NoAction)
+  designRef       String?
+  status          RequirementStatus      @default(PROPOSED)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  tasks           TaskRequirement[]
+  components      RequirementComponent[]
+
+  @@unique([projectId, code])
+  @@index([agreementItemId])
+}
+
+model Component {
+  id             String                 @id @default(cuid())
+  projectId      String
+  project        Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code           String
+  name           String
+  description    String?
+  ownerId        String?
+  owner          User?                  @relation(fields: [ownerId], references: [id])
+  unitTestStatus UnitTestStatus         @default(NOT_TESTED)
+  version        String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  tasks          TaskComponent[]
+  requirements   RequirementComponent[]
+
+  @@unique([projectId, code])
+}
+
+model TaskRequirement {
+  projectId     String
+  project       Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId        String
+  task          Task        @relation(fields: [taskId], references: [id], onDelete: NoAction)
+  requirementId String
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: NoAction)
+  createdAt     DateTime    @default(now())
+
+  @@id([taskId, requirementId])
+  @@index([requirementId])
+  @@index([projectId])
+}
+
+model TaskComponent {
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId      String
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: NoAction)
+  componentId String
+  component   Component @relation(fields: [componentId], references: [id], onDelete: NoAction)
+  createdAt   DateTime  @default(now())
+
+  @@id([taskId, componentId])
+  @@index([componentId])
+  @@index([projectId])
+}
+
+model RequirementComponent {
+  projectId     String
+  project       Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirementId String
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: NoAction)
+  componentId   String
+  component     Component   @relation(fields: [componentId], references: [id], onDelete: NoAction)
+  createdAt     DateTime    @default(now())
+
+  @@id([requirementId, componentId])
+  @@index([componentId])
+  @@index([projectId])
 }

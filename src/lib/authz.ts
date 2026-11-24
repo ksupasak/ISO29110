@@ -9,7 +9,10 @@ export type Action =
   | "document.upload"
   | "document.setStatus"
   | "document.baseline"
-  | "attachment.add";
+  | "attachment.add"
+  | "plan.manage"
+  | "trace.manage"
+  | "requirement.approve";
 
 /** `roles` null means the user is not a member of the project. */
 export type Actor = {
@@ -36,6 +39,9 @@ const RULES: Record<Action, readonly ProjectRole[]> = {
   "document.setStatus": ["PM", "TL", "AN", "PR", "QA"],
   "document.baseline": ["PM", "TL"],
   "attachment.add": ["PM", "TL", "AN", "PR", "QA"],
+  "plan.manage": ["PM"],
+  "trace.manage": ["AN", "TL"],
+  "requirement.approve": ["TL", "PM"],
 };
 
 export function can(actor: Actor, action: Action): boolean {
@@ -43,6 +49,13 @@ export function can(actor: Actor, action: Action): boolean {
   if (actor.roles === null) return false;
   const allowed = RULES[action];
   return actor.roles.some((r) => allowed.includes(r));
+}
+
+/** PM/ADMIN, or the task's assignee while they are a member with a working role (not VIEWER only). */
+export function canUpdateTaskProgress(actor: Actor, task: { assigneeId: string | null }): boolean {
+  if (can(actor, "plan.manage")) return true;
+  if (actor.roles === null || task.assigneeId === null || task.assigneeId !== actor.user.id) return false;
+  return actor.roles.some((r) => r !== "VIEWER");
 }
 
 export function assertCan(actor: Actor, action: Action): void {
