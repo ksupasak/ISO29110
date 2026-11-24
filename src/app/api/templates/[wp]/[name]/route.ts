@@ -43,7 +43,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ wp: string;
   if (!file) return notFound();
   let data: Buffer;
   try {
-    data = await fs.readFile(file);
+    data = await fs.readFile(/*turbopackIgnore: true*/ file);
   } catch {
     return notFound();
   }

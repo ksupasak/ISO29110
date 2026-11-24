@@ -62,6 +62,11 @@ describe("AI settings entry", () => {
   });
 });
 
+test("change-password page breadcrumb", () => {
+  expect(breadcrumbs("/account/password")).toEqual([{ label: "เปลี่ยนรหัสผ่าน" }]);
+  expect(navSections("/account/password", false)).toHaveLength(1);
+});
+
 describe("Template entry", () => {
   test("admins see Template linking to /admin/templates, non-admins do not", () => {
     const link = navSections("/", true)[0].links.find((l) => l.label === "Template");

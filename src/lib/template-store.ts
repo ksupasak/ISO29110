@@ -8,13 +8,13 @@ const byName = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 /** Folder that holds the templates and samples; never cached so a replaced file shows up on the next request. */
 export function templatesRoot(): string {
-  return path.resolve(process.env.TEMPLATES_DIR?.trim() || "./templates");
+  return path.resolve(/*turbopackIgnore: true*/ process.env.TEMPLATES_DIR?.trim() || "./templates");
 }
 
 async function realRoot(): Promise<string | null> {
   try {
-    const real = await fs.realpath(templatesRoot());
-    return (await fs.stat(real)).isDirectory() ? real : null;
+    const real = await fs.realpath(/*turbopackIgnore: true*/ templatesRoot());
+    return (await fs.stat(/*turbopackIgnore: true*/ real)).isDirectory() ? real : null;
   } catch {
     return null;
   }
@@ -23,7 +23,7 @@ async function realRoot(): Promise<string | null> {
 async function walk(dir: string, found: Map<string, string[]>, wpCode: string | null): Promise<void> {
   let entries;
   try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
+    entries = await fs.readdir(/*turbopackIgnore: true*/ dir, { withFileTypes: true });
   } catch {
     return;
   }
@@ -72,9 +72,9 @@ export async function resolveTemplateFile(wpCode: string, name: string): Promise
   const found = await findFile(root, wpCode, name);
   if (!found) return null;
   try {
-    const real = await fs.realpath(found);
+    const real = await fs.realpath(/*turbopackIgnore: true*/ found);
     if (real !== found || !real.startsWith(root + path.sep)) return null;
-    return (await fs.stat(real)).isFile() ? real : null;
+    return (await fs.stat(/*turbopackIgnore: true*/ real)).isFile() ? real : null;
   } catch {
     return null;
   }
@@ -83,7 +83,7 @@ export async function resolveTemplateFile(wpCode: string, name: string): Promise
 async function findFile(dir: string, wpCode: string, name: string): Promise<string | null> {
   let entries;
   try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
+    entries = await fs.readdir(/*turbopackIgnore: true*/ dir, { withFileTypes: true });
   } catch {
     return null;
   }

@@ -1,7 +1,8 @@
 import { Prisma, type SystemRole, type User } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { hashPassword } from "@/lib/auth/password";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { hashToken } from "@/lib/auth/session";
 import { fail, ok, type ActionResult } from "@/lib/result";
 import { parseInput } from "@/lib/validation";
 
@@ -110,6 +111,26 @@ export async function resetPassword(admin: User, id: string, password: string): 
     prisma.user.update({ where: { id }, data: { passwordHash: await hashPassword(parsed.data) } }),
     // Existing logins stop working once the password changes.
     prisma.session.deleteMany({ where: { userId: id } }),
+  ]);
+  return ok(null);
+}
+
+/**
+ * Self-service password change. On success the user's other sessions are dropped; the one whose cookie token is
+ * `currentSessionToken` stays logged in.
+ */
+export async function changeOwnPassword(
+  user: Pick<User, "id">,
+  input: { current: string; next: string; currentSessionToken: string },
+): Promise<ActionResult<null>> {
+  const stored = await prisma.user.findUnique({ where: { id: user.id }, select: { passwordHash: true } });
+  if (!stored || !(await verifyPassword(input.current, stored.passwordHash))) return fail("รหัสผ่านเดิมไม่ถูกต้อง");
+  const parsed = parseInput(passwordSchema, input.next);
+  if (!parsed.ok) return parsed;
+  if (input.next === input.current) return fail("รหัสผ่านใหม่ต้องต่างจากรหัสเดิม");
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(parsed.data) } }),
+    prisma.session.deleteMany({ where: { userId: user.id, tokenHash: { not: hashToken(input.currentSessionToken) } } }),
   ]);
   return ok(null);
 }

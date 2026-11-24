@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth/current-user";
+import { cookies } from "next/headers";
+import { requireAdmin, requireUser } from "@/lib/auth/current-user";
+import { SESSION_COOKIE } from "@/lib/auth/session";
 import { formText } from "@/lib/form";
-import { createUser, resetPassword, setUserActive, updateUser } from "./service";
+import { changeOwnPassword, createUser, resetPassword, setUserActive, updateUser } from "./service";
 
 /** `values` echoes non-secret submitted fields so the dialog can repopulate after an error. */
 export type UserFormState = { error?: string; ok?: boolean; values?: Record<string, string> };
@@ -57,4 +59,16 @@ export async function resetPasswordAction(_prev: UserFormState, formData: FormDa
 export async function setUserActiveAction(id: string, active: boolean): Promise<UserFormState> {
   const admin = await requireAdmin();
   return toState(await setUserActive(admin, id, active), new FormData());
+}
+
+export type PasswordFormState = { error?: string; ok?: boolean };
+
+/** Never echoes the typed passwords back. */
+export async function changeOwnPasswordAction(_prev: PasswordFormState, formData: FormData): Promise<PasswordFormState> {
+  const user = await requireUser();
+  const next = formText(formData, "next");
+  if (next !== formText(formData, "confirm")) return { error: "รหัสผ่านใหม่และการยืนยันไม่ตรงกัน" };
+  const token = (await cookies()).get(SESSION_COOKIE)?.value ?? "";
+  const r = await changeOwnPassword(user, { current: formText(formData, "current"), next, currentSessionToken: token });
+  return r.ok ? { ok: true } : { error: r.error };
 }

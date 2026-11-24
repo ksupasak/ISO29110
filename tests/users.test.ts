@@ -1,10 +1,10 @@
-import { beforeEach, expect, test } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { resetDb } from "./setup/db";
-import { authenticate } from "@/lib/auth/session";
+import { authenticate, createSession } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/auth/password";
-import { createUser, listUsers, resetPassword, setUserActive, updateUser } from "@/features/users/service";
+import { changeOwnPassword, createUser, listUsers, resetPassword, setUserActive, updateUser } from "@/features/users/service";
 
 let admin: User;
 let plain: User;
@@ -91,4 +91,51 @@ test("listUsers never exposes passwordHash", async () => {
   if (!r.ok) throw new Error("expected ok");
   expect(r.data).toHaveLength(2);
   for (const u of r.data) expect(u).not.toHaveProperty("passwordHash");
+});
+
+describe("changeOwnPassword", () => {
+  const sessionRows = (userId: string) => prisma.session.count({ where: { userId } });
+
+  test("wrong current password is rejected and nothing changes", async () => {
+    const { token } = await createSession(plain.id);
+    expect(await changeOwnPassword(plain, { current: "nope-nope", next: "brandnew99", currentSessionToken: token })).toEqual({
+      ok: false,
+      error: "รหัสผ่านเดิมไม่ถูกต้อง",
+    });
+    expect(await authenticate("plain", "oldpass123")).not.toBeNull();
+  });
+
+  test("new password follows the admin-reset rule (8+ characters)", async () => {
+    const { token } = await createSession(plain.id);
+    expect(await changeOwnPassword(plain, { current: "oldpass123", next: "short", currentSessionToken: token })).toEqual({
+      ok: false,
+      error: "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร",
+    });
+  });
+
+  test("the same password is rejected", async () => {
+    const { token } = await createSession(plain.id);
+    expect(await changeOwnPassword(plain, { current: "oldpass123", next: "oldpass123", currentSessionToken: token })).toEqual({
+      ok: false,
+      error: "รหัสผ่านใหม่ต้องต่างจากรหัสเดิม",
+    });
+  });
+
+  test("success swaps the password, drops other sessions of the user and keeps the current one", async () => {
+    const current = await createSession(plain.id);
+    await createSession(plain.id);
+    await createSession(plain.id);
+    const otherUser = await createSession(admin.id);
+    expect(await changeOwnPassword(plain, { current: "oldpass123", next: "brandnew99", currentSessionToken: current.token })).toEqual({
+      ok: true,
+      data: null,
+    });
+    expect(await authenticate("plain", "brandnew99")).not.toBeNull();
+    expect(await authenticate("plain", "oldpass123")).toBeNull();
+    expect(await sessionRows(plain.id)).toBe(1);
+    const { getSessionUser } = await import("@/lib/auth/session");
+    expect((await getSessionUser(current.token))?.id).toBe(plain.id);
+    expect(await sessionRows(admin.id)).toBe(1);
+    expect((await getSessionUser(otherUser.token))?.id).toBe(admin.id);
+  });
 });

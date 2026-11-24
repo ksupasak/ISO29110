@@ -6,7 +6,6 @@
 - ทดสอบติดตั้งครั้งแรกบน server จริงด้วย `docker compose up -d --build` (เส้นทาง network ปกติยังไม่เคยรัน) และทดสอบ backup → restore ตาม README หัวข้อ "ตรวจรับการติดตั้งครั้งแรก"
 
 ## งานแรกของ Release 2
-- ผู้ใช้เปลี่ยนรหัสผ่านของตนเองได้ (ปัจจุบัน Admin ตั้งให้เท่านั้น)
 - จำกัดชนิดข้อมูลที่ requireUser คืน ไม่ให้มี passwordHash
 - เพิ่มช่อง customerContact, type, devCycle ในฟอร์มโครงการ (จำเป็นต่อการส่งออก docx)
 - e2e: กรณีคนนอกทีมเปิด /projects/<code> และ /api/files/<id> ได้ 404; คลิก dialog แนบหลักฐาน

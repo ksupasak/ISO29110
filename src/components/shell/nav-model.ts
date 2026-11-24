@@ -62,6 +62,7 @@ const TRACE_TITLE = "การอ้างอิง";
 export function breadcrumbs(pathname: string): Crumb[] {
   if (within(pathname, "/admin/users")) return [{ label: "ผู้ใช้งาน" }];
   if (within(pathname, "/admin/ai")) return [{ label: "ตั้งค่า AI" }];
+  if (within(pathname, "/account/password")) return [{ label: "เปลี่ยนรหัสผ่าน" }];
   if (within(pathname, "/admin/templates")) return [{ label: "Template" }];
   if (within(pathname, "/projects/new")) return [{ label: "โครงการ", href: "/" }, { label: "สร้างโครงการ" }];
   const code = projectCode(pathname);

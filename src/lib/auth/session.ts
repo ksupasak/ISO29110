@@ -9,7 +9,7 @@ export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // Hash compared against when the username is unknown, so response time does not reveal which usernames exist.
 const DUMMY_HASH = "$2b$10$S8TpqXwWobDMhJ1TkXWBe.aEwr1ZHzz4aH5gwtiEwvTi.z3mWEDiK";
 
-function hashToken(token: string): string {
+export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
