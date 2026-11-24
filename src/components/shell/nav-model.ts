@@ -42,6 +42,7 @@ export function navSections(pathname: string, isAdmin: boolean): NavSection[] {
         { href: `${base}/plan`, label: "แผนงาน", icon: "account_tree", active: within(pathname, `${base}/plan`) },
         { href: `${base}/requirements`, label: "Requirement", icon: "checklist", active: within(pathname, `${base}/requirements`) },
         { href: `${base}/components`, label: "Component", icon: "widgets", active: within(pathname, `${base}/components`) },
+        { href: `${base}/trace`, label: "การอ้างอิง", icon: "hub", active: within(pathname, `${base}/trace`) },
       ],
     });
   }
@@ -54,6 +55,7 @@ const SECTION_TITLES: [string, string][] = [
   ["requirements", "Requirement"],
   ["components", "Component"],
 ];
+const TRACE_TITLE = "การอ้างอิง";
 
 /** Breadcrumb trail for the topbar; the last crumb is the current page and carries no link. */
 export function breadcrumbs(pathname: string): Crumb[] {
@@ -67,6 +69,7 @@ export function breadcrumbs(pathname: string): Crumb[] {
   if (within(pathname, `${base}/documents`)) {
     return [{ label: "โครงการ", href: "/" }, { label, href: base }, { label: "เอกสาร" }];
   }
+  if (within(pathname, `${base}/trace`)) return [{ label: "โครงการ", href: "/" }, { label, href: base }, { label: TRACE_TITLE }];
   for (const [segment, title] of SECTION_TITLES) {
     if (!within(pathname, `${base}/${segment}`)) continue;
     const rest = pathname.slice(`${base}/${segment}`.length).split("/").filter(Boolean);

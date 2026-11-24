@@ -2,9 +2,11 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth/current-user";
 import { formatThaiDate } from "@/lib/dates";
 import { listVisibleProjects } from "@/features/projects/service";
+import { listMyOpenTasks } from "@/features/plan/service";
+import { AppCard } from "@/components/app-card";
 import { Icon } from "@/components/icon";
 import { PageHeader } from "@/components/page-header";
-import { ProjectStatusBadge } from "@/components/status-badge";
+import { ProjectStatusBadge, TaskStatusBadge } from "@/components/status-badge";
 
 function SummaryCard({ icon, tone, label, value }: { icon: string; tone: "primary" | "success" | "muted"; label: string; value: number }) {
   return (
@@ -24,7 +26,7 @@ function SummaryCard({ icon, tone, label, value }: { icon: string; tone: "primar
 
 export default async function HomePage() {
   const user = await requireUser();
-  const projects = await listVisibleProjects(user);
+  const [projects, myTasks] = await Promise.all([listVisibleProjects(user), listMyOpenTasks(user)]);
   const active = projects.filter((p) => p.status === "ACTIVE").length;
   const closed = projects.filter((p) => p.status === "CLOSED").length;
   return (
@@ -72,6 +74,41 @@ export default async function HomePage() {
           ))}
         </div>
       )}
+      <div className="mt-4">
+        <AppCard title="งานของฉัน" icon="assignment_ind">
+          <div className="table-responsive">
+            <table className="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th scope="col" className="d-none d-md-table-cell">รหัสโครงการ</th>
+                  <th scope="col">รหัส Task</th>
+                  <th scope="col">ชื่องาน</th>
+                  <th scope="col" className="text-nowrap d-none d-md-table-cell">กำหนดเสร็จ</th>
+                  <th scope="col">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myTasks.length === 0 && (
+                  <tr><td colSpan={5} className="text-center text-body-secondary py-4">ไม่มีงานค้าง</td></tr>
+                )}
+                {myTasks.map((t) => (
+                  <tr key={`${t.projectCode}/${t.taskCode}`}>
+                    <td className="d-none d-md-table-cell text-nowrap">
+                      <Link href={`/projects/${t.projectCode}`}>{t.projectCode}</Link>
+                    </td>
+                    <td className="fw-medium text-nowrap">
+                      <Link href={`/projects/${t.projectCode}/plan/${t.taskCode}`}>{t.taskCode}</Link>
+                    </td>
+                    <td>{t.title}</td>
+                    <td className="d-none d-md-table-cell text-nowrap">{formatThaiDate(t.plannedEnd) || "-"}</td>
+                    <td><TaskStatusBadge status={t.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </AppCard>
+      </div>
     </>
   );
 }
