@@ -144,7 +144,12 @@ export default async function PlanPage({ params, searchParams }: PageProps<"/pro
             </div>
           )}
         </div>
-        <form method="get" className="card-body border-bottom row g-2 align-items-end">
+        {/* Keyed by the applied filters: a client-side navigation (e.g. ล้างตัวกรอง) must reset the uncontrolled selects. */}
+        <form
+          key={`${filter.status ?? ""}|${filter.assigneeId ?? ""}|${filter.kind ?? ""}|${view}|${scale}`}
+          method="get"
+          className="card-body border-bottom row g-2 align-items-end"
+        >
           {view === "gantt" && <input type="hidden" name="view" value="gantt" />}
           {scale === "month" && <input type="hidden" name="scale" value="month" />}
           <div className="col-6 col-md-3">
@@ -176,10 +181,23 @@ export default async function PlanPage({ params, searchParams }: PageProps<"/pro
         {view === "gantt" ? (
           tasks.length === 0 ? (
             <p className="card-body text-center text-body-secondary py-4 mb-0">{filtered ? "ไม่พบ Task ตามตัวกรอง" : "ยังไม่มี Task"}</p>
-          ) : gantt ? (
-            <GanttChart model={gantt} tasks={tasks} base={base} today={today} />
           ) : (
-            <p className="card-body text-center text-body-secondary py-4 mb-0">ยังไม่มี Task ที่กำหนดวันตามแผน</p>
+            <>
+              {ganttModel?.truncated && (
+                <div className="card-body pb-0">
+                  <div className="alert alert-warning mb-0" role="alert">
+                    มี Task หรือ Milestone ที่วันอยู่นอกช่วงที่แสดงได้ (เกิน 5 ปีจากวันนี้) กรุณาตรวจสอบปีของวันที่
+                  </div>
+                </div>
+              )}
+              {gantt ? (
+                <GanttChart model={gantt} tasks={tasks} base={base} today={today} />
+              ) : (
+                <p className="card-body text-center text-body-secondary py-4 mb-0">
+                  {filtered ? "ไม่พบ Task ที่กำหนดวันตามตัวกรอง" : "ยังไม่มี Task ที่กำหนดวันตามแผน"}
+                </p>
+              )}
+            </>
           )
         ) : (
           <div className="table-responsive">

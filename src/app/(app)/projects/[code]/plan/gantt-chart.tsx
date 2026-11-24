@@ -9,6 +9,8 @@ const BAR_H = 12;
 const ACTUAL_Y = 22;
 const ACTUAL_H = 4;
 const DIAMOND = 6;
+/** Deeper levels keep the depth-4 indent so the code and title stay visible in the narrow column. */
+const MAX_INDENT_DEPTH = 4;
 
 const range = (a: Date | null, b: Date | null) => `${formatThaiDate(a ?? b) || "-"} - ${formatThaiDate(b ?? a) || "-"}`;
 
@@ -33,13 +35,18 @@ export function GanttChart({
         <div className="gantt-names">
           <div className="gantt-names-head">Task</div>
           {model.rows.map((r) => (
-            <div key={r.id} className="gantt-name" style={{ paddingLeft: `${0.5 + r.depth * 0.75}rem` }}>
+            <div
+              key={r.id}
+              className="gantt-name"
+              style={{ paddingLeft: `${0.5 + Math.min(r.depth, MAX_INDENT_DEPTH) * 0.75}rem` }}
+            >
               <Link href={`${base}/plan/${r.code}`} className="fw-medium">{r.code}</Link>
               <span className="gantt-name-title" title={r.title}>{r.title}</span>
+              {r.late && <span className="badge text-bg-danger gantt-late">เลยกำหนด</span>}
             </div>
           ))}
         </div>
-        <div className="gantt-scroll">
+        <div className="gantt-scroll" tabIndex={0} role="region" aria-label="ช่วงเวลาของ Gantt chart (เลื่อนซ้ายขวาได้)">
           <svg
             className="gantt-svg"
             width={model.width}

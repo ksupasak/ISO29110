@@ -16,11 +16,11 @@ export type GanttRow = {
   code: string;
   title: string;
   depth: number;
-  /** null when the task has no planned date. */
+  /** Clipped to the chart; null when the task has no planned date or it lies wholly outside the (capped) range. */
   planned: GanttBar | null;
   /** planned.width * percent / 100; 0 when there is no planned bar. */
   progressWidth: number;
-  /** actualStart..(actualEnd ?? today), clipped to the chart; null when there is no actualStart. */
+  /** actualStart..(actualEnd ?? today), clipped to the chart; null when there is no actualStart or it is wholly outside. */
   actual: GanttBar | null;
   /** status is not DONE and the planned end is before today. */
   late: boolean;
@@ -35,12 +35,16 @@ export type GanttModel = {
   milestones: GanttMarker[];
   /** Centre of today's column; null when today is outside the range. */
   todayX: number | null;
+  /** Some dates lay more than 5 years from today (usually a mistyped year) and were left out of the range. */
+  truncated: boolean;
 } | null;
 
 const DAY_MS = 86_400_000;
 const DAY_WIDTH: Record<GanttScale, number> = { week: 16, month: 4 };
 /** Today joins the range only when it lies this close to it. */
 const TODAY_REACH_DAYS = 30;
+/** A range longer than this is capped to today ± this many years, so a mistyped year cannot make the chart huge. */
+const MAX_YEARS = 5;
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
 const dayOf = (d: Date) => Math.floor(d.getTime() / DAY_MS);
@@ -60,6 +64,12 @@ function span(a: Date | null, b: Date | null): [number, number] | null {
 }
 
 const milestoneDate = (m: GanttMilestoneInput) => m.actualDate ?? m.revisedDate ?? m.plannedDate;
+
+/** Day number of the same calendar day `years` later (Feb 29 rolls to Mar 1). */
+function addYears(day: number, years: number): number {
+  const d = dateOf(day);
+  return dayOf(new Date(Date.UTC(d.getUTCFullYear() + years, d.getUTCMonth(), d.getUTCDate())));
+}
 
 /** UTC-midnight Date of the current calendar day in Asia/Bangkok. */
 export function bangkokToday(now: Date = new Date()): Date {
@@ -93,6 +103,16 @@ export function buildGantt(
 
   let min = Math.min(...days);
   let max = Math.max(...days);
+  let truncated = false;
+  if (max > addYears(min, MAX_YEARS)) {
+    const lo = addYears(today, -MAX_YEARS);
+    const hi = addYears(today, MAX_YEARS);
+    const kept = days.filter((day) => day >= lo && day <= hi);
+    truncated = true;
+    // Nothing usable left: centre an empty chart on today.
+    min = kept.length ? Math.min(...kept) : today;
+    max = kept.length ? Math.max(...kept) : today;
+  }
   if (today >= min - TODAY_REACH_DAYS && today <= max + TODAY_REACH_DAYS) {
     min = Math.min(min, today);
     max = Math.max(max, today);
@@ -109,7 +129,12 @@ export function buildGantt(
   }
 
   const x = (day: number) => (day - min) * dayWidth;
-  const bar = (s: number, e: number): GanttBar => ({ x: x(s), width: (e - s + 1) * dayWidth });
+  /** Bar for [s, e] clipped to the range; null when it lies wholly outside. */
+  const bar = (s: number, e: number): GanttBar | null => {
+    const cs = Math.max(s, min);
+    const ce = Math.min(e, max);
+    return cs <= ce ? { x: x(cs), width: (ce - cs + 1) * dayWidth } : null;
+  };
   const centre = (day: number) => x(day) + dayWidth / 2;
 
   const ticks: GanttTick[] = [];
@@ -134,13 +159,8 @@ export function buildGantt(
     const p = span(t.plannedStart, t.plannedEnd);
     const planned = p ? bar(p[0], p[1]) : null;
     const percent = Math.min(100, Math.max(0, t.percent));
-    let actual: GanttBar | null = null;
-    if (t.actualStart) {
-      const [s, e] = span(t.actualStart, t.actualEnd ?? opts.today)!;
-      const cs = Math.max(s, min);
-      const ce = Math.min(e, max);
-      if (cs <= ce) actual = bar(cs, ce);
-    }
+    const a = t.actualStart ? span(t.actualStart, t.actualEnd ?? opts.today) : null;
+    const actual = a ? bar(a[0], a[1]) : null;
     return {
       id: t.id,
       code: t.code,
@@ -156,7 +176,7 @@ export function buildGantt(
   const markers: GanttMarker[] = [];
   for (const m of milestones) {
     const d = milestoneDate(m);
-    if (d) markers.push({ id: m.id, code: m.code, name: m.name, x: centre(dayOf(d)) });
+    if (d && dayOf(d) >= min && dayOf(d) <= max) markers.push({ id: m.id, code: m.code, name: m.name, x: centre(dayOf(d)) });
   }
 
   return {
@@ -165,5 +185,6 @@ export function buildGantt(
     rows,
     milestones: markers,
     todayX: today >= min && today <= max ? centre(today) : null,
+    truncated,
   };
 }

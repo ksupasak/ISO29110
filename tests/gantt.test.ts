@@ -139,6 +139,64 @@ describe("buildGantt", () => {
     expect(near.todayX).toBe(16 + 8);
   });
 
+  it("today joins the range at exactly 30 days outside it, not at 31", () => {
+    // Monday 2026-12-07 .. Sunday 2026-12-13 is a whole week; 2026-11-07 is 30 days before, 2026-11-06 is 31
+    const tasks = [task({ plannedStart: d("2026-12-07"), plannedEnd: d("2026-12-13") })];
+    const at30 = buildGantt(tasks, [], { scale: "week", today: d("2026-11-07") })!;
+    expect(at30.todayX).not.toBeNull();
+    expect(at30.width).toBe(42 * 16); // Mon 2026-11-02 .. Sun 2026-12-13
+    const at31 = buildGantt(tasks, [], { scale: "week", today: d("2026-11-06") })!;
+    expect(at31.todayX).toBeNull();
+    expect(at31.width).toBe(7 * 16);
+    // and after the range: 2026-12-13 + 30 = 2027-01-12, + 31 = 2027-01-13
+    expect(buildGantt(tasks, [], { scale: "week", today: d("2027-01-12") })!.todayX).not.toBeNull();
+    expect(buildGantt(tasks, [], { scale: "week", today: d("2027-01-13") })!.todayX).toBeNull();
+  });
+
+  it("caps the range at 5 years from today when a date has a mistyped year", () => {
+    const normal = [
+      task({ id: "a", plannedStart: d("2026-11-02"), plannedEnd: d("2026-11-06"), percent: 50 }),
+      task({ id: "b", plannedStart: d("2026-11-09"), plannedEnd: d("2026-12-04") }),
+    ];
+    const typo = task({ id: "bad", plannedStart: d("2569-11-02"), plannedEnd: d("2569-11-10") });
+    const ms = [milestone({ id: "m-bad", plannedDate: d("2569-12-31") }), milestone({ id: "m-ok", code: "M2", plannedDate: d("2026-11-30") })];
+    const clean = buildGantt(normal, [ms[1]], week)!;
+    const g = buildGantt([...normal, typo], ms, week)!;
+    expect(g.truncated).toBe(true);
+    expect(g.width).toBeLessThan(5 * 16 * 366 * 2);
+    expect(g.width).toBe(clean.width);
+    expect(g.rows.find((r) => r.id === "bad")!.planned).toBeNull();
+    expect(g.rows.find((r) => r.id === "bad")!.progressWidth).toBe(0);
+    expect(g.rows.filter((r) => r.id !== "bad")).toEqual(clean.rows);
+    expect(g.milestones.map((m) => m.id)).toEqual(["m-ok"]);
+    expect(clean.truncated).toBe(false);
+  });
+
+  it("clips a bar that crosses the 5-year limit", () => {
+    const g = buildGantt(
+      [task({ plannedStart: d("2026-11-02"), plannedEnd: d("2026-11-06") }), task({ plannedStart: d("2026-11-02"), plannedEnd: d("2569-01-01") })],
+      [],
+      week,
+    )!;
+    expect(g.truncated).toBe(true);
+    const bar = g.rows[1].planned!;
+    expect(bar.x).toBe(0);
+    expect(bar.x + bar.width).toBeLessThanOrEqual(g.width);
+  });
+
+  it("does not truncate a normal two-year plan", () => {
+    const g = buildGantt([task({ plannedStart: d("2026-01-05"), plannedEnd: d("2027-12-31") })], [], month)!;
+    expect(g.truncated).toBe(false);
+    expect(g.rows[0].planned!.width).toBe((361 + 365) * 4); // 05/01/2026..31/12/2027 inclusive
+  });
+
+  it("the cap applies to the span, not to a short plan far from today", () => {
+    const g = buildGantt([task({ plannedStart: d("2569-11-02") })], [], week)!;
+    expect(g.truncated).toBe(false);
+    expect(g.rows[0].planned).toMatchObject({ width: 16 });
+    expect(g.todayX).toBeNull();
+  });
+
   it("milestone marker uses actual, then revised, then planned date", () => {
     const tasks = [task({ plannedStart: d("2026-11-02"), plannedEnd: d("2026-11-29") })];
     const g = buildGantt(

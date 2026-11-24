@@ -533,9 +533,17 @@ $gantt-row: 32px;
   gap: .5rem;
   height: $gantt-row;
   padding-right: .5rem;
+  overflow: hidden;
   font-size: .8125rem;
   white-space: nowrap;
   border-bottom: 1px solid var(--bs-border-color);
+}
+
+// "Late" in words, so the state is not colour-only; small enough to keep the 32 px row.
+.gantt-late {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: .6875rem;
 }
 
 .gantt-name-title {
@@ -548,6 +556,11 @@ $gantt-row: 32px;
   flex: 1 1 auto;
   min-width: 0;
   overflow-x: auto;
+
+  &:focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: -2px;
+  }
 }
 
 .gantt-svg {
