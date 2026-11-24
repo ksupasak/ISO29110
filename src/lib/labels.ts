@@ -1,4 +1,4 @@
-import type { ProjectRole, ProjectStatus, TaskKind, TaskStatus } from "@prisma/client";
+import type { ProjectRole, ProjectStatus, RequirementStatus, RequirementType, TaskKind, TaskStatus, UnitTestStatus } from "@prisma/client";
 import { isFinalStatus } from "@/lib/wp-catalog";
 
 export const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -72,4 +72,43 @@ const TASK_STATUS_VARIANT = {
 /** Bootstrap colour for a task status: to-do grey, doing blue, done green, blocked red. */
 export function taskStatusVariant(status: TaskStatus): (typeof TASK_STATUS_VARIANT)[TaskStatus] {
   return TASK_STATUS_VARIANT[status];
+}
+
+export const REQUIREMENT_STATUS_LABEL: Record<RequirementStatus, string> = {
+  PROPOSED: "เสนอ",
+  APPROVED: "อนุมัติ",
+  DROPPED: "ยกเลิก",
+};
+
+export const REQUIREMENT_TYPE_LABEL: Record<RequirementType, string> = {
+  FUNCTIONAL: "Functional",
+  NON_FUNCTIONAL: "Non-functional",
+};
+
+export const UNIT_TEST_LABEL: Record<UnitTestStatus, string> = {
+  NOT_TESTED: "ยังไม่ทดสอบ",
+  PASSED: "ผ่าน",
+  FAILED: "ไม่ผ่าน",
+};
+
+const REQUIREMENT_STATUS_VARIANT = {
+  PROPOSED: "info",
+  APPROVED: "success",
+  DROPPED: "secondary",
+} as const satisfies Record<RequirementStatus, string>;
+
+/** Bootstrap colour for a requirement status: proposed blue, approved green, dropped grey. */
+export function requirementStatusVariant(status: RequirementStatus): (typeof REQUIREMENT_STATUS_VARIANT)[RequirementStatus] {
+  return REQUIREMENT_STATUS_VARIANT[status];
+}
+
+const UNIT_TEST_VARIANT = {
+  NOT_TESTED: "secondary",
+  PASSED: "success",
+  FAILED: "danger",
+} as const satisfies Record<UnitTestStatus, string>;
+
+/** Bootstrap colour for a unit-test status: untested grey, passed green, failed red. */
+export function unitTestVariant(status: UnitTestStatus): (typeof UNIT_TEST_VARIANT)[UnitTestStatus] {
+  return UNIT_TEST_VARIANT[status];
 }

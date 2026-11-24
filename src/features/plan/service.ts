@@ -292,11 +292,23 @@ export async function updateTaskProgress(
 }
 
 export async function deleteTask(user: User, taskId: string): Promise<ActionResult<null>> {
-  const stored = await prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
+  const stored = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: {
+      projectId: true,
+      children: { select: { code: true } },
+      requirements: { select: { requirement: { select: { code: true } } } },
+      components: { select: { component: { select: { code: true } } } },
+    },
+  });
   if (!stored) return fail(NO_TASK);
   if (!can(await getActor(user, stored.projectId), "plan.manage")) return fail(FORBIDDEN);
-  const children = await prisma.task.findMany({ where: { parentId: taskId }, select: { code: true } });
-  if (children.length > 0) return inUse(children.map((c) => c.code));
+  const refs = [
+    ...stored.children.map((c) => c.code),
+    ...stored.requirements.map((r) => r.requirement.code),
+    ...stored.components.map((c) => c.component.code),
+  ];
+  if (refs.length > 0) return inUse(refs);
   try {
     await prisma.task.delete({ where: { id: taskId } });
   } catch (e) {

@@ -40,11 +40,20 @@ export function navSections(pathname: string, isAdmin: boolean): NavSection[] {
         { href: base, label: "ภาพรวม", icon: "dashboard", active: pathname === base },
         { href: `${base}/documents`, label: "เอกสาร", icon: "description", active: within(pathname, `${base}/documents`) },
         { href: `${base}/plan`, label: "แผนงาน", icon: "account_tree", active: within(pathname, `${base}/plan`) },
+        { href: `${base}/requirements`, label: "Requirement", icon: "checklist", active: within(pathname, `${base}/requirements`) },
+        { href: `${base}/components`, label: "Component", icon: "widgets", active: within(pathname, `${base}/components`) },
       ],
     });
   }
   return sections;
 }
+
+/** Project pages that have a list and per-item detail pages (`<section>/<code>`). */
+const SECTION_TITLES: [string, string][] = [
+  ["plan", "แผนงาน"],
+  ["requirements", "Requirement"],
+  ["components", "Component"],
+];
 
 /** Breadcrumb trail for the topbar; the last crumb is the current page and carries no link. */
 export function breadcrumbs(pathname: string): Crumb[] {
@@ -58,11 +67,12 @@ export function breadcrumbs(pathname: string): Crumb[] {
   if (within(pathname, `${base}/documents`)) {
     return [{ label: "โครงการ", href: "/" }, { label, href: base }, { label: "เอกสาร" }];
   }
-  if (within(pathname, `${base}/plan`)) {
-    const rest = pathname.slice(`${base}/plan`.length).split("/").filter(Boolean);
+  for (const [segment, title] of SECTION_TITLES) {
+    if (!within(pathname, `${base}/${segment}`)) continue;
+    const rest = pathname.slice(`${base}/${segment}`.length).split("/").filter(Boolean);
     const crumbs: Crumb[] = [{ label: "โครงการ", href: "/" }, { label, href: base }];
-    if (rest.length === 0) return [...crumbs, { label: "แผนงาน" }];
-    return [...crumbs, { label: "แผนงาน", href: `${base}/plan` }, { label: decode(rest[0]) }];
+    if (rest.length === 0) return [...crumbs, { label: title }];
+    return [...crumbs, { label: title, href: `${base}/${segment}` }, { label: decode(rest[0]) }];
   }
   return [{ label: "โครงการ", href: "/" }, { label }];
 }

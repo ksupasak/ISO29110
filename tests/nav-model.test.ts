@@ -17,6 +17,8 @@ describe("navSections", () => {
         ["ภาพรวม", "/projects/ABC-1"],
         ["เอกสาร", "/projects/ABC-1/documents"],
         ["แผนงาน", "/projects/ABC-1/plan"],
+        ["Requirement", "/projects/ABC-1/requirements"],
+        ["Component", "/projects/ABC-1/components"],
       ]);
     }
   });
@@ -27,6 +29,9 @@ describe("navSections", () => {
     expect(active("/projects/ABC-1/documents")).toEqual(["เอกสาร"]);
     expect(active("/projects/ABC-1/plan")).toEqual(["แผนงาน"]);
     expect(active("/projects/ABC-1/plan/T-001")).toEqual(["แผนงาน"]);
+    expect(active("/projects/ABC-1/requirements")).toEqual(["Requirement"]);
+    expect(active("/projects/ABC-1/requirements/REQ-F01")).toEqual(["Requirement"]);
+    expect(active("/projects/ABC-1/components/C01")).toEqual(["Component"]);
   });
 
   test("project section is absent for the create page, which activates the project list", () => {
@@ -37,7 +42,7 @@ describe("navSections", () => {
 
   test("a URL-encoded code is kept as-is in hrefs", () => {
     const hrefs = navSections("/projects/INT%2F2569", false)[1].links.map((l) => l.href);
-    expect(hrefs).toEqual(["/projects/INT%2F2569", "/projects/INT%2F2569/documents", "/projects/INT%2F2569/plan"]);
+    expect(hrefs).toEqual(["/projects/INT%2F2569", "/projects/INT%2F2569/documents", "/projects/INT%2F2569/plan", "/projects/INT%2F2569/requirements", "/projects/INT%2F2569/components"]);
   });
 });
 
@@ -84,6 +89,21 @@ describe("breadcrumbs", () => {
       { label: "แผนงาน", href: "/projects/ABC-1/plan" },
       { label: "T-001" },
     ]);
+  });
+
+  test("requirement and component pages", () => {
+    expect(breadcrumbs("/projects/ABC-1/requirements")).toEqual([
+      { label: "โครงการ", href: "/" },
+      { label: "ABC-1", href: "/projects/ABC-1" },
+      { label: "Requirement" },
+    ]);
+    expect(breadcrumbs("/projects/ABC-1/requirements/REQ-F01")).toEqual([
+      { label: "โครงการ", href: "/" },
+      { label: "ABC-1", href: "/projects/ABC-1" },
+      { label: "Requirement", href: "/projects/ABC-1/requirements" },
+      { label: "REQ-F01" },
+    ]);
+    expect(breadcrumbs("/projects/ABC-1/components/C01").at(-1)).toEqual({ label: "C01" });
   });
 
   test("a URL-encoded code is decoded for the label and kept encoded in the link", () => {

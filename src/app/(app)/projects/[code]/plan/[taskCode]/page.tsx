@@ -6,9 +6,12 @@ import { TASK_KIND_LABEL } from "@/lib/labels";
 import { getProjectByCode } from "@/features/projects/service";
 import { listMembers } from "@/features/members/service";
 import { getTask, listPlan } from "@/features/plan/service";
+import { listComponents, listRequirements } from "@/features/trace/service";
+import { setTaskLinksAction } from "@/features/trace/actions";
 import { deleteTaskAction } from "@/features/plan/actions";
 import { AppCard } from "@/components/app-card";
 import { DeleteButton } from "@/components/delete-button";
+import { LinkDialog } from "@/components/link-dialog";
 import { ReferencePanel } from "@/components/reference-panel";
 import { TaskStatusBadge } from "@/components/status-badge";
 import { ProgressDialog, TaskDialog } from "../plan-dialogs";
@@ -29,6 +32,11 @@ export default async function TaskDetailPage({ params }: PageProps<"/projects/[c
   const [members, plan] = canManage
     ? await Promise.all([listMembers(user, project.id), listPlan(user, project.id)])
     : [[], { milestones: [], tasks: [] }];
+
+  const manageLinks = can(actor, "trace.manage");
+  const [allRequirements, allComponents] = manageLinks
+    ? await Promise.all([listRequirements(user, project.id), listComponents(user, project.id)])
+    : [[], []];
 
   const days = (n: number | null) => (n === null ? "-" : `${n} วัน`);
   const facts: [string, React.ReactNode][] = [
@@ -95,6 +103,28 @@ export default async function TaskDetailPage({ params }: PageProps<"/projects/[c
 
       <ReferencePanel
         title="การอ้างอิง"
+        actions={
+          manageLinks && (
+            <LinkDialog
+              action={setTaskLinksAction}
+              hidden={{ taskId: task.id }}
+              groups={[
+                {
+                  name: "requirementIds",
+                  legend: "Requirement",
+                  options: allRequirements.map((r) => ({ id: r.id, label: `${r.code} ${r.text}` })),
+                  selected: task.requirements.map((r) => r.id),
+                },
+                {
+                  name: "componentIds",
+                  legend: "Component",
+                  options: allComponents.map((c) => ({ id: c.id, label: `${c.code} ${c.name}` })),
+                  selected: task.components.map((c) => c.id),
+                },
+              ]}
+            />
+          )
+        }
         groups={[
           {
             label: "Requirement",

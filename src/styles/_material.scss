@@ -487,3 +487,9 @@ body {
   white-space: normal;
   text-align: end;
 }
+
+// Checkbox list inside a link dialog: long lists scroll instead of stretching the modal.
+.link-options {
+  max-height: 14rem;
+  overflow-y: auto;
+}
