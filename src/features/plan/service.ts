@@ -43,6 +43,8 @@ export type TaskRow = {
   milestoneCode: string | null;
   plannedStart: Date | null;
   plannedEnd: Date | null;
+  actualStart: Date | null;
+  actualEnd: Date | null;
   status: TaskStatus;
   percent: number;
 };
@@ -50,8 +52,6 @@ export type TaskRow = {
 export type TaskDetail = TaskRow & {
   isoActivity: string | null;
   qaType: string | null;
-  actualStart: Date | null;
-  actualEnd: Date | null;
   plannedDays: number | null;
   actualDays: number | null;
   outputWp: string | null;
@@ -361,6 +361,8 @@ function toRow(t: TaskWithRefs, depth: number): TaskRow {
     milestoneCode: t.milestone?.code ?? null,
     plannedStart: t.plannedStart,
     plannedEnd: t.plannedEnd,
+    actualStart: t.actualStart,
+    actualEnd: t.actualEnd,
     status: t.status,
     percent: t.percent,
   };
@@ -430,8 +432,6 @@ export async function getTask(user: User, projectId: string, taskCode: string): 
     ...toRow(t, depth),
     isoActivity: t.isoActivity,
     qaType: t.qaType,
-    actualStart: t.actualStart,
-    actualEnd: t.actualEnd,
     plannedDays: num(t.plannedDays),
     actualDays: num(t.actualDays),
     outputWp: t.outputWp,

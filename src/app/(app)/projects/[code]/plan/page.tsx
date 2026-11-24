@@ -8,12 +8,14 @@ import { getProjectByCode } from "@/features/projects/service";
 import { listMembers } from "@/features/members/service";
 import { TASK_KINDS, TASK_STATUSES, listPlan, type PlanFilter } from "@/features/plan/service";
 import { deleteMilestoneAction, deleteTaskAction } from "@/features/plan/actions";
+import { bangkokToday, buildGantt, type GanttScale } from "@/features/plan/gantt";
 import { AppCard } from "@/components/app-card";
 import { DeleteButton } from "@/components/delete-button";
 import { Icon } from "@/components/icon";
 import { TaskStatusBadge } from "@/components/status-badge";
 import { MilestoneDialog, TaskDialog } from "./plan-dialogs";
 import { milestoneFormValue } from "./form-values";
+import { GanttChart } from "./gantt-chart";
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 const range = (a: Date | null, b: Date | null) => (a || b ? `${formatThaiDate(a) || "-"} - ${formatThaiDate(b) || "-"}` : "-");
@@ -33,6 +35,8 @@ export default async function PlanPage({ params, searchParams }: PageProps<"/pro
     ...(TASK_KINDS.includes(kind as never) ? { kind: kind as PlanFilter["kind"] } : {}),
     ...(assignee ? { assigneeId: assignee } : {}),
   };
+  const view: "table" | "gantt" = one(sp.view) === "gantt" ? "gantt" : "table";
+  const scale: GanttScale = one(sp.scale) === "month" ? "month" : "week";
 
   const canManage = can(await getActor(user, project.id), "plan.manage");
   const [all, members] = await Promise.all([listPlan(user, project.id), listMembers(user, project.id)]);
@@ -49,6 +53,32 @@ export default async function PlanPage({ params, searchParams }: PageProps<"/pro
   const parentOptions = all.tasks.map((t) => ({ id: t.id, label: `${t.code} ${t.title}` }));
   const base = `/projects/${project.code}`;
   const filtered = Object.keys(filter).length > 0;
+  /** Plan URL that keeps the current filters, view and scale unless overridden; defaults are left out of the query. */
+  const planHref = (over: { view?: typeof view; scale?: GanttScale; clearFilters?: boolean } = {}) => {
+    const q = new URLSearchParams();
+    if (!over.clearFilters) {
+      if (filter.status) q.set("status", filter.status);
+      if (filter.assigneeId) q.set("assignee", filter.assigneeId);
+      if (filter.kind) q.set("kind", filter.kind);
+    }
+    if ((over.view ?? view) === "gantt") q.set("view", "gantt");
+    if ((over.scale ?? scale) === "month") q.set("scale", "month");
+    const qs = q.toString();
+    return qs ? `${base}/plan?${qs}` : `${base}/plan`;
+  };
+  const today = bangkokToday();
+  // Milestone dates alone give an axis but no bars: treat that as "no dated task" too.
+  const ganttModel = view === "gantt" && tasks.length > 0 ? buildGantt(tasks, milestones, { scale, today }) : null;
+  const gantt = ganttModel?.rows.some((r) => r.planned || r.actual) ? ganttModel : null;
+  const switchLink = (href: string, label: string, active: boolean) => (
+    <Link
+      href={href}
+      className={active ? "btn btn-outline-primary active" : "btn btn-outline-primary"}
+      aria-current={active ? "page" : undefined}
+    >
+      {label}
+    </Link>
+  );
 
   return (
     <div className="d-grid gap-4">
@@ -102,7 +132,26 @@ export default async function PlanPage({ params, searchParams }: PageProps<"/pro
           )
         }
       >
-        <form method="get" className="card-body border-bottom row g-2 align-items-end">
+        <div className="card-body border-bottom py-2 d-flex flex-wrap gap-2">
+          <div className="btn-group btn-group-sm" role="group" aria-label="มุมมอง">
+            {switchLink(planHref({ view: "table" }), "ตาราง", view === "table")}
+            {switchLink(planHref({ view: "gantt" }), "Gantt", view === "gantt")}
+          </div>
+          {view === "gantt" && (
+            <div className="btn-group btn-group-sm" role="group" aria-label="มาตราส่วนเวลา">
+              {switchLink(planHref({ scale: "week" }), "สัปดาห์", scale === "week")}
+              {switchLink(planHref({ scale: "month" }), "เดือน", scale === "month")}
+            </div>
+          )}
+        </div>
+        {/* Keyed by the applied filters: a client-side navigation (e.g. ล้างตัวกรอง) must reset the uncontrolled selects. */}
+        <form
+          key={`${filter.status ?? ""}|${filter.assigneeId ?? ""}|${filter.kind ?? ""}|${view}|${scale}`}
+          method="get"
+          className="card-body border-bottom row g-2 align-items-end"
+        >
+          {view === "gantt" && <input type="hidden" name="view" value="gantt" />}
+          {scale === "month" && <input type="hidden" name="scale" value="month" />}
           <div className="col-6 col-md-3">
             <label htmlFor="f-status" className="form-label small text-body-secondary mb-1">สถานะ</label>
             <select id="f-status" name="status" className="form-select form-select-sm" defaultValue={filter.status ?? ""}>
@@ -126,53 +175,76 @@ export default async function PlanPage({ params, searchParams }: PageProps<"/pro
           </div>
           <div className="col-6 col-md-3 d-flex gap-2">
             <button type="submit" className="btn btn-outline-primary btn-sm">กรอง</button>
-            {filtered && <Link href={`${base}/plan`} className="btn btn-link btn-sm">ล้างตัวกรอง</Link>}
+            {filtered && <Link href={planHref({ clearFilters: true })} className="btn btn-link btn-sm">ล้างตัวกรอง</Link>}
           </div>
         </form>
-        <div className="table-responsive">
-          <table className="table table-hover align-middle">
-            <thead>
-              <tr>
-                <th scope="col">รหัส</th>
-                <th scope="col" className="d-none d-md-table-cell">WBS</th>
-                <th scope="col">ชื่องาน</th>
-                <th scope="col" className="d-none d-md-table-cell">ชนิด</th>
-                <th scope="col" className="d-none d-md-table-cell">ผู้รับผิดชอบ</th>
-                <th scope="col" className="text-nowrap d-none d-md-table-cell">แผน</th>
-                <th scope="col">สถานะ</th>
-                <th scope="col" className="text-end">%</th>
-                <th scope="col" className="table-actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.length === 0 && (
-                <tr><td colSpan={9} className="text-center text-body-secondary py-4">{filtered ? "ไม่พบ Task ตามตัวกรอง" : "ยังไม่มี Task"}</td></tr>
+        {view === "gantt" ? (
+          tasks.length === 0 ? (
+            <p className="card-body text-center text-body-secondary py-4 mb-0">{filtered ? "ไม่พบ Task ตามตัวกรอง" : "ยังไม่มี Task"}</p>
+          ) : (
+            <>
+              {ganttModel?.truncated && (
+                <div className="card-body pb-0">
+                  <div className="alert alert-warning mb-0" role="alert">
+                    มี Task หรือ Milestone ที่วันอยู่นอกช่วงที่แสดงได้ (เกิน 5 ปีจากวันนี้) กรุณาตรวจสอบปีของวันที่
+                  </div>
+                </div>
               )}
-              {tasks.map((t) => (
-                <tr key={t.id}>
-                  <td className="fw-medium text-nowrap">
-                    <Link href={`${base}/plan/${t.code}`}>{t.code}</Link>
-                  </td>
-                  <td className="d-none d-md-table-cell text-nowrap">{t.wbsCode ?? "-"}</td>
-                  <td style={{ paddingLeft: `${0.5 + t.depth * 1.25}rem` }}>{t.title}</td>
-                  <td className="d-none d-md-table-cell">{TASK_KIND_LABEL[t.kind]}</td>
-                  <td className="d-none d-md-table-cell text-nowrap">{t.assigneeName ?? "-"}</td>
-                  <td className="d-none d-md-table-cell text-nowrap">{range(t.plannedStart, t.plannedEnd)}</td>
-                  <td><TaskStatusBadge status={t.status} /></td>
-                  <td className="text-end">{t.percent}</td>
-                  <td className="text-end table-actions">
-                    <Link href={`${base}/plan/${t.code}`} className="btn btn-icon" aria-label="ดูรายละเอียด" title="ดูรายละเอียด">
-                      <Icon name="visibility" />
-                    </Link>
-                    {canManage && (
-                      <DeleteButton confirmText={`ลบ ${t.code} ${t.title}?`} action={deleteTaskAction.bind(null, t.id)} />
-                    )}
-                  </td>
+              {gantt ? (
+                <GanttChart model={gantt} tasks={tasks} base={base} today={today} />
+              ) : (
+                <p className="card-body text-center text-body-secondary py-4 mb-0">
+                  {filtered ? "ไม่พบ Task ที่กำหนดวันตามตัวกรอง" : "ยังไม่มี Task ที่กำหนดวันตามแผน"}
+                </p>
+              )}
+            </>
+          )
+        ) : (
+          <div className="table-responsive">
+            <table className="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th scope="col">รหัส</th>
+                  <th scope="col" className="d-none d-md-table-cell">WBS</th>
+                  <th scope="col">ชื่องาน</th>
+                  <th scope="col" className="d-none d-md-table-cell">ชนิด</th>
+                  <th scope="col" className="d-none d-md-table-cell">ผู้รับผิดชอบ</th>
+                  <th scope="col" className="text-nowrap d-none d-md-table-cell">แผน</th>
+                  <th scope="col">สถานะ</th>
+                  <th scope="col" className="text-end">%</th>
+                  <th scope="col" className="table-actions" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {tasks.length === 0 && (
+                  <tr><td colSpan={9} className="text-center text-body-secondary py-4">{filtered ? "ไม่พบ Task ตามตัวกรอง" : "ยังไม่มี Task"}</td></tr>
+                )}
+                {tasks.map((t) => (
+                  <tr key={t.id}>
+                    <td className="fw-medium text-nowrap">
+                      <Link href={`${base}/plan/${t.code}`}>{t.code}</Link>
+                    </td>
+                    <td className="d-none d-md-table-cell text-nowrap">{t.wbsCode ?? "-"}</td>
+                    <td style={{ paddingLeft: `${0.5 + t.depth * 1.25}rem` }}>{t.title}</td>
+                    <td className="d-none d-md-table-cell">{TASK_KIND_LABEL[t.kind]}</td>
+                    <td className="d-none d-md-table-cell text-nowrap">{t.assigneeName ?? "-"}</td>
+                    <td className="d-none d-md-table-cell text-nowrap">{range(t.plannedStart, t.plannedEnd)}</td>
+                    <td><TaskStatusBadge status={t.status} /></td>
+                    <td className="text-end">{t.percent}</td>
+                    <td className="text-end table-actions">
+                      <Link href={`${base}/plan/${t.code}`} className="btn btn-icon" aria-label="ดูรายละเอียด" title="ดูรายละเอียด">
+                        <Icon name="visibility" />
+                      </Link>
+                      {canManage && (
+                        <DeleteButton confirmText={`ลบ ${t.code} ${t.title}?`} action={deleteTaskAction.bind(null, t.id)} />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </AppCard>
     </div>
   );
