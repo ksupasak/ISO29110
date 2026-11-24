@@ -141,3 +141,17 @@ export const OPEN_ISSUE_STATUS_LABEL: Record<OpenIssueStatus, string> = {
   OPEN: "ค้าง",
   CLOSED: "ปิดแล้ว",
 };
+
+const MEETING_STATUS_VARIANT = { DRAFT: "secondary", APPROVED: "success" } as const satisfies Record<MeetingStatus, string>;
+
+/** Bootstrap colour for a meeting status: Draft grey, Approved green. */
+export function meetingStatusVariant(status: MeetingStatus): (typeof MEETING_STATUS_VARIANT)[MeetingStatus] {
+  return MEETING_STATUS_VARIANT[status];
+}
+
+const OPEN_ISSUE_STATUS_VARIANT = { OPEN: "warning", CLOSED: "success" } as const satisfies Record<OpenIssueStatus, string>;
+
+/** Bootstrap colour for an open issue: still open amber, closed green. */
+export function openIssueStatusVariant(status: OpenIssueStatus): (typeof OPEN_ISSUE_STATUS_VARIANT)[OpenIssueStatus] {
+  return OPEN_ISSUE_STATUS_VARIANT[status];
+}

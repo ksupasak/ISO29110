@@ -66,8 +66,8 @@
 
 ### 5.1 คลัง template (2A)
 
-- ตำแหน่ง: ตัวแปร `TEMPLATES_DIR` ค่าเริ่มต้น `./templates` ใน Docker ผูกโฟลเดอร์ของเครื่อง server (`./templates:/data/templates`) เพื่อให้ admin แก้ไฟล์จากเครื่องได้ ไม่ใช้ named volume
-- เนื้อหาตั้งต้น: คัดลอก `../repository/FRA_flora_01` (9 โฟลเดอร์ช่วงงาน / 23 โฟลเดอร์ WP, template 23 ไฟล์, ตัวอย่าง 31 ไฟล์) มาไว้ที่ `templates/` ใน repo
+- สองโฟลเดอร์: `templates-default/` (มากับระบบ อยู่ใน git, `TEMPLATES_DEFAULT_DIR`; เนื้อหาตั้งต้นคัดลอกจาก `../repository/FRA_flora_01` — 9 โฟลเดอร์ช่วงงาน / 23 โฟลเดอร์ WP, template 23 ไฟล์, ตัวอย่าง 31 ไฟล์ — ห้ามแก้บน server) และ `templates/` (override ของ admin, `TEMPLATES_DIR` ค่าเริ่มต้น `./templates`, ไม่อยู่ใน git; ใน Docker ผูกโฟลเดอร์ของเครื่อง server `./templates:/data/templates` แบบอ่านอย่างเดียว ไม่ใช้ named volume)
+- เลือกไฟล์ราย WP: ถ้า `templates/` มี template ของ WP ใด ใช้ไฟล์นั้น ไม่เช่นนั้นใช้ของ `templates-default/`; ตัวอย่างรวมจากทั้งสองโฟลเดอร์ ชื่อซ้ำใช้ของ `templates/`
 - การจับคู่ อ่านสดทุกคำขอ ไม่เก็บ cache ข้ามคำขอ:
   - โฟลเดอร์ระดับใดก็ได้ที่ชื่อมี `WPnn` (สองหลัก) เป็นของ WP นั้น
   - ไฟล์ในโฟลเดอร์นั้นที่ชื่อขึ้นต้น `WPnn_` คือ template (ถ้ามีหลายไฟล์ ใช้ไฟล์แรกตามลำดับชื่อ และหน้าตรวจ template เตือน)

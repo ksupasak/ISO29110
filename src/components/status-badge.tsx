@@ -1,11 +1,15 @@
-import type { ProjectRole, ProjectStatus, RequirementStatus, TaskStatus, UnitTestStatus } from "@prisma/client";
+import type { MeetingStatus, OpenIssueStatus, ProjectRole, ProjectStatus, RequirementStatus, TaskStatus, UnitTestStatus } from "@prisma/client";
 import {
+  MEETING_STATUS_LABEL,
+  OPEN_ISSUE_STATUS_LABEL,
   REQUIREMENT_STATUS_LABEL,
   ROLE_LABEL,
   STATUS_LABEL,
   TASK_STATUS_LABEL,
   UNIT_TEST_LABEL,
   docStatusVariant,
+  meetingStatusVariant,
+  openIssueStatusVariant,
   projectStatusVariant,
   requirementStatusVariant,
   taskStatusVariant,
@@ -46,4 +50,12 @@ export function RequirementStatusBadge({ status }: { status: RequirementStatus }
 
 export function UnitTestBadge({ status }: { status: UnitTestStatus }) {
   return <StatusChip variant={unitTestVariant(status)}>{UNIT_TEST_LABEL[status]}</StatusChip>;
+}
+
+export function MeetingStatusBadge({ status }: { status: MeetingStatus }) {
+  return <StatusChip variant={meetingStatusVariant(status)}>{MEETING_STATUS_LABEL[status]}</StatusChip>;
+}
+
+export function OpenIssueStatusBadge({ status }: { status: OpenIssueStatus }) {
+  return <StatusChip variant={openIssueStatusVariant(status)}>{OPEN_ISSUE_STATUS_LABEL[status]}</StatusChip>;
 }

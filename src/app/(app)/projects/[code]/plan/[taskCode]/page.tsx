@@ -8,6 +8,7 @@ import { listMembers } from "@/features/members/service";
 import { getTask, listPlan } from "@/features/plan/service";
 import { listComponents, listRequirements } from "@/features/trace/service";
 import { setTaskLinksAction } from "@/features/trace/actions";
+import { listIssuesForTask } from "@/features/meetings/service";
 import { deleteTaskAction } from "@/features/plan/actions";
 import { AppCard } from "@/components/app-card";
 import { DeleteButton } from "@/components/delete-button";
@@ -37,6 +38,9 @@ export default async function TaskDetailPage({ params }: PageProps<"/projects/[c
   const [allRequirements, allComponents] = manageLinks
     ? await Promise.all([listRequirements(user, project.id), listComponents(user, project.id)])
     : [[], []];
+
+  // getTask above already checked that the user can view this project.
+  const issues = await listIssuesForTask(task.id);
 
   const days = (n: number | null) => (n === null ? "-" : `${n} วัน`);
   const facts: [string, React.ReactNode][] = [
@@ -133,6 +137,10 @@ export default async function TaskDetailPage({ params }: PageProps<"/projects/[c
           {
             label: "Component",
             items: task.components.map((c) => ({ code: c.code, text: c.name, href: `${base}/components/${c.code}` })),
+          },
+          {
+            label: "ประเด็นประชุมต้นทาง",
+            items: issues.map((i) => ({ code: i.meetingCode, text: i.text, href: `${base}/meetings/${i.meetingCode}` })),
           },
           ...(task.children.length > 0
             ? [{ label: "Task ย่อย", items: task.children.map((c) => ({ code: c.code, text: c.title, href: `${base}/plan/${c.code}` })) }]

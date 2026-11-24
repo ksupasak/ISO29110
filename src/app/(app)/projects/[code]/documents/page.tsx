@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/current-user";
 import { can, getActor } from "@/lib/authz";
@@ -76,6 +77,12 @@ export default async function DocumentsPage({ params }: PageProps<"/projects/[co
                         <Icon name="download" className="me-1" />
                         ดาวน์โหลด template
                       </a>
+                    )}
+                    {item.wp.code === "WP07" && (
+                      <Link className="btn btn-outline-primary btn-sm" href={`/projects/${project.code}/meetings`}>
+                        <Icon name="groups" className="me-1" />
+                        ไปที่การประชุม
+                      </Link>
                     )}
                     {canSetStatus && !locked && (
                       <StatusSelect projectId={project.id} wpCode={item.wp.code} status={item.status} options={options} />

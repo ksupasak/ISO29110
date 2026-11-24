@@ -44,6 +44,7 @@ export function navSections(pathname: string, isAdmin: boolean): NavSection[] {
         { href: `${base}/requirements`, label: "Requirement", icon: "checklist", active: within(pathname, `${base}/requirements`) },
         { href: `${base}/components`, label: "Component", icon: "widgets", active: within(pathname, `${base}/components`) },
         { href: `${base}/trace`, label: "การอ้างอิง", icon: "hub", active: within(pathname, `${base}/trace`) },
+        { href: `${base}/meetings`, label: "การประชุม", icon: "groups", active: within(pathname, `${base}/meetings`) },
       ],
     });
   }
@@ -55,6 +56,7 @@ const SECTION_TITLES: [string, string][] = [
   ["plan", "แผนงาน"],
   ["requirements", "Requirement"],
   ["components", "Component"],
+  ["meetings", "การประชุม"],
 ];
 const TRACE_TITLE = "การอ้างอิง";
 
