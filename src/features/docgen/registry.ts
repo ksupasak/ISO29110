@@ -73,6 +73,18 @@ export function compareTags(wpCode: string, structure: TagNode[], tree: TagTree)
   return problems;
 }
 
+/**
+ * Fills a generated WP's template after checking its tags against the declared structure, so a missing or
+ * misspelled tag is reported (by name) instead of silently leaving a blank. Throws TemplateError.
+ */
+export function fillGenerated(wpCode: string, file: Buffer, data: Record<string, unknown>): Buffer {
+  const wp = GENERATED_WPS[wpCode];
+  if (!wp) throw new TemplateError([`${wpCode} ไม่ใช่ WP ที่ระบบสร้างเอกสาร`]);
+  const problems = compareTags(wpCode, wp.structure, tagTree(file));
+  if (problems.length > 0) throw new TemplateError(problems);
+  return fillTemplate(file, data);
+}
+
 /** File found, tag structure matches, and the sample data fills. Never throws for a template problem. */
 export async function checkTemplate(wpCode: string): Promise<TemplateCheck> {
   const wp = GENERATED_WPS[wpCode];

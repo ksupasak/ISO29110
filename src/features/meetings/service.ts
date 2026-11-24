@@ -18,9 +18,12 @@ import { inUse, naturalCompare, writing } from "@/lib/in-use";
 import { ROLE_LABEL } from "@/lib/labels";
 import { fail, ok, type ActionResult } from "@/lib/result";
 import { nextCode } from "@/lib/sequence";
-import { deleteFile } from "@/lib/storage";
+import { deleteFile, openFile, saveFile } from "@/lib/storage";
 import { parseInput } from "@/lib/validation";
+import { TemplateError } from "@/lib/docfill";
+import { fillGenerated, loadTemplate, templateErrorText } from "@/features/docgen/registry";
 import { effectiveIssueStatus } from "./issue-status";
+import { meetingDocData, type MeetingDocSource } from "./wp07";
 
 /** `Attachment.entityType` of files attached to a meeting (signed copies, the approved docx). */
 export const MEETING_ENTITY = "meeting";
@@ -38,6 +41,11 @@ const NOT_OPEN_ISSUE = "ทำได้เฉพาะประเด็นค�
 const STATUS_FOLLOWS_TASK = "สถานะตาม Task ที่โยงอยู่";
 const TIME_FORMAT = "เวลาต้องอยู่ในรูปแบบ HH:MM";
 const TIME_ORDER = "เวลาสิ้นสุดต้องไม่ก่อนเวลาเริ่ม";
+const ALREADY_APPROVED = "การประชุมนี้อนุมัติแล้ว";
+const NOT_APPROVED = "การประชุมนี้ยังไม่ได้อนุมัติ";
+const NO_FROZEN = "ไม่พบไฟล์ฉบับอนุมัติ";
+const WP_CODE = "WP07";
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 // ---------- views ----------
 
@@ -200,9 +208,12 @@ export async function lockDraftMeeting(tx: Prisma.TransactionClient, meetingId: 
 }
 
 /** Run `fn` in a transaction; Refusals become failures, FK races "not found". */
-async function inTx<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<ActionResult<T>> {
+async function inTx<T>(
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  options?: { timeout?: number },
+): Promise<ActionResult<T>> {
   try {
-    return await writing(() => prisma.$transaction(fn));
+    return await writing(() => prisma.$transaction(fn, options));
   } catch (e) {
     if (e instanceof Refusal) return fail(e.message);
     throw e;
@@ -658,11 +669,14 @@ export async function getMeeting(user: User, projectId: string, code: string): P
     },
   });
   if (!m) return null;
-  const attachments = await prisma.attachment.findMany({
-    where: { projectId, entityType: MEETING_ENTITY, entityId: m.id },
-    include: { uploadedBy: { select: { fullName: true } } },
-    orderBy: { createdAt: "asc" },
-  });
+  // The approved copy is the meeting's own output, not an upload: it is reached through export.
+  const attachments = (
+    await prisma.attachment.findMany({
+      where: { projectId, entityType: MEETING_ENTITY, entityId: m.id },
+      include: { uploadedBy: { select: { fullName: true } } },
+      orderBy: { createdAt: "asc" },
+    })
+  ).filter((a) => a.id !== m.approvedFileId);
   const { previous, approvedBy, attendees, items, ...header } = m;
   return {
     ...header,
@@ -712,4 +726,160 @@ export async function listIssuesForTask(taskId: string): Promise<{ meetingCode: 
   return rows
     .sort((a, b) => naturalCompare(a.meeting.code, b.meeting.code) || a.order - b.order)
     .map((r) => ({ meetingCode: r.meeting.code, text: r.text }));
+}
+
+// ---------- approve, revert, export ----------
+
+/** Everything the WP07 document needs, read through `db` (inside the approval transaction, or plain). */
+async function docSource(db: Prisma.TransactionClient, meetingId: string): Promise<MeetingDocSource | null> {
+  const m = await db.meeting.findUnique({
+    where: { id: meetingId },
+    include: {
+      project: { select: { name: true, code: true } },
+      previous: { select: { code: true, meetingDate: true } },
+      attendees: true,
+      items: { include: { owner: { select: { fullName: true } }, task: { select: { code: true, status: true } } } },
+    },
+  });
+  if (!m) return null;
+  return {
+    ...m,
+    items: m.items.map((i) => ({ ...i, ownerName: i.ownerName ?? i.owner?.fullName ?? null })),
+  };
+}
+
+const docFileName = (src: { code: string; project: { code: string } }) => `${src.project.code}_${src.code}.docx`;
+
+/** Best-effort removal of a stored file: a failure here must never replace the original result. */
+async function discardFile(storedPath: string): Promise<void> {
+  try {
+    await deleteFile(storedPath);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Freezes the meeting: fills WP07 with the meeting as Approved, stores it as an attachment of the meeting and sets
+ * the approval fields. The data is read and the status changed inside one transaction holding the meeting row lock
+ * (the same lock every mutation takes), so no change can land between the snapshot and the approval.
+ */
+export async function approveMeeting(user: User, meetingId: string): Promise<ActionResult<Meeting>> {
+  const stored = await prisma.meeting.findUnique({ where: { id: meetingId }, select: { projectId: true, status: true } });
+  if (!stored) return fail(NO_MEETING);
+  if (!can(await getActor(user, stored.projectId), "meeting.approve")) return fail(FORBIDDEN);
+  if (stored.status === "APPROVED") return fail(ALREADY_APPROVED);
+  let template: Buffer;
+  try {
+    template = await loadTemplate(WP_CODE);
+  } catch (e) {
+    if (e instanceof TemplateError) return fail(templateErrorText(WP_CODE, e));
+    throw e;
+  }
+  let savedPath: string | null = null;
+  try {
+    const r = await inTx(
+      async (tx) => {
+        await lockDraftMeeting(tx, meetingId);
+        const src = await docSource(tx, meetingId);
+        if (!src) throw new Refusal(NO_MEETING);
+        let data: Buffer;
+        try {
+          data = fillGenerated(WP_CODE, template, meetingDocData({ ...src, status: "APPROVED" }));
+        } catch (e) {
+          if (e instanceof TemplateError) throw new Refusal(templateErrorText(WP_CODE, e));
+          throw e;
+        }
+        const fileName = docFileName(src);
+        const saved = await saveFile(stored.projectId, fileName, data);
+        savedPath = saved.storedPath;
+        const attachment = await tx.attachment.create({
+          data: {
+            projectId: stored.projectId,
+            entityType: MEETING_ENTITY,
+            entityId: meetingId,
+            kind: "OTHER",
+            fileName,
+            storedPath: saved.storedPath,
+            size: saved.size,
+            mime: DOCX_MIME,
+            uploadedById: user.id,
+          },
+        });
+        return tx.meeting.update({
+          where: { id: meetingId },
+          data: { status: "APPROVED", approvedAt: new Date(), approvedById: user.id, approvedFileId: attachment.id },
+        });
+      },
+      { timeout: 20_000 },
+    );
+    if (!r.ok && savedPath) await discardFile(savedPath);
+    return r;
+  } catch (e) {
+    if (savedPath) await discardFile(savedPath);
+    throw e;
+  }
+}
+
+/** Back to Draft: clears the approval fields and removes the frozen copy (row and file). */
+export async function revertMeeting(user: User, meetingId: string): Promise<ActionResult<Meeting>> {
+  const stored = await prisma.meeting.findUnique({ where: { id: meetingId }, select: { projectId: true, status: true } });
+  if (!stored) return fail(NO_MEETING);
+  if (!can(await getActor(user, stored.projectId), "meeting.approve")) return fail(FORBIDDEN);
+  if (stored.status !== "APPROVED") return fail(NOT_APPROVED);
+  let removedPath: string | null = null;
+  const r = await inTx(async (tx) => {
+    const rows = await tx.$queryRaw<{ status: MeetingStatus; approvedFileId: string | null }[]>`
+      SELECT "status", "approvedFileId" FROM "Meeting" WHERE "id" = ${meetingId} FOR UPDATE`;
+    if (rows.length === 0) throw new Refusal(NO_MEETING);
+    if (rows[0].status !== "APPROVED") throw new Refusal(NOT_APPROVED);
+    const meeting = await tx.meeting.update({
+      where: { id: meetingId },
+      data: { status: "DRAFT", approvedAt: null, approvedById: null, approvedFileId: null },
+    });
+    const fileId = rows[0].approvedFileId;
+    if (fileId) {
+      const frozen = await tx.attachment.findUnique({ where: { id: fileId }, select: { storedPath: true } });
+      if (frozen) {
+        await tx.attachment.delete({ where: { id: fileId } });
+        removedPath = frozen.storedPath;
+      }
+    }
+    return meeting;
+  });
+  if (r.ok && removedPath) await discardFile(removedPath);
+  return r;
+}
+
+/**
+ * The WP07 docx of a meeting: an Approved meeting gives its frozen copy byte for byte; a Draft is filled now.
+ * A template problem fails with Thai text naming WP07 and the cause.
+ */
+export async function exportMeeting(
+  user: User,
+  meetingId: string,
+): Promise<ActionResult<{ fileName: string; data: Buffer }>> {
+  const m = await prisma.meeting.findUnique({
+    where: { id: meetingId },
+    select: { projectId: true, status: true, approvedFile: { select: { fileName: true, storedPath: true } } },
+  });
+  if (!m) return fail(NO_MEETING);
+  if (!can(await getActor(user, m.projectId), "project.view")) return fail(FORBIDDEN);
+  if (m.status === "APPROVED") {
+    if (!m.approvedFile) return fail(NO_FROZEN);
+    try {
+      return ok({ fileName: m.approvedFile.fileName, data: await openFile(m.approvedFile.storedPath) });
+    } catch {
+      return fail(NO_FROZEN);
+    }
+  }
+  const src = await docSource(prisma, meetingId);
+  if (!src) return fail(NO_MEETING);
+  try {
+    const data = fillGenerated(WP_CODE, await loadTemplate(WP_CODE), meetingDocData(src));
+    return ok({ fileName: docFileName(src), data });
+  } catch (e) {
+    if (e instanceof TemplateError) return fail(templateErrorText(WP_CODE, e));
+    throw e;
+  }
 }

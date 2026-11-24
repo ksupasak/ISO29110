@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import { SESSION_COOKIE, getSessionUser } from "@/lib/auth/session";
 import { encodeRFC5987, readCookie } from "@/lib/http";
-import { TemplateError, fillTemplate } from "@/lib/docfill";
+import { TemplateError } from "@/lib/docfill";
 import { resolveTemplateFile, scanTemplates } from "@/lib/template-store";
-import { GENERATED_WPS, templateErrorText } from "@/features/docgen/registry";
+import { GENERATED_WPS, fillGenerated, templateErrorText } from "@/features/docgen/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +43,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ wp: string;
   const generated = GENERATED_WPS[wp];
   if (generated && base === (await scanTemplates()).get(wp)?.template) {
     try {
-      data = fillTemplate(data, generated.blank);
+      data = fillGenerated(wp, data, generated.blank);
     } catch (e) {
       if (!(e instanceof TemplateError)) throw e;
       return new Response(templateErrorText(wp, e), {

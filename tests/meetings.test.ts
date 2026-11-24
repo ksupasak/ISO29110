@@ -1,17 +1,24 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import PizZip from "pizzip";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import type { Meeting, Prisma, ProjectRole, SystemRole, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { countStoredFiles, resetDb } from "./setup/db";
 import { createProject } from "@/features/projects/service";
 import { createTask } from "@/features/plan/service";
 import { addAttachment } from "@/features/documents/service";
+import { openFile } from "@/lib/storage";
 import {
   addAttendee,
   addItem,
+  approveMeeting,
   createMeeting,
   createTaskFromIssue,
   deleteMeeting,
   effectiveIssueStatus,
+  exportMeeting,
   getMeeting,
   linkIssueToTask,
   listIssuesForTask,
@@ -20,6 +27,7 @@ import {
   MEETING_ENTITY,
   removeAttendee,
   removeItem,
+  revertMeeting,
   updateAttendee,
   updateItem,
   updateMeeting,
@@ -682,5 +690,251 @@ describe("reads", () => {
       { meetingCode: b.code, text: "จาก b" },
     ]);
     expect(await listIssuesForTask((await task()).id)).toEqual([]);
+  });
+});
+
+// ---------- Task 4: approve, revert, export ----------
+
+const WP07_DIR = path.join("02_Project Plan Execution, Assessment and Control (PM.02-PM.03)", "05_WP07_Meeting Record");
+const WP07_FILE = "WP07_meeting_record.docx";
+const shippedWp07 = () => fs.readFileSync(path.resolve("templates-default", WP07_DIR, WP07_FILE));
+const docText = (buf: Buffer) =>
+  [...new PizZip(buf).file("word/document.xml")!.asText().matchAll(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g)].map((m) => m[1]).join("");
+
+describe("approve, revert, export", () => {
+  let overrideRoot: string;
+  const savedEnv = { dir: process.env.TEMPLATES_DIR, def: process.env.TEMPLATES_DEFAULT_DIR };
+  beforeEach(() => {
+    overrideRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "mr-export-")));
+    process.env.TEMPLATES_DIR = overrideRoot;
+    process.env.TEMPLATES_DEFAULT_DIR = path.resolve("templates-default");
+  });
+  afterEach(() => {
+    fs.rmSync(overrideRoot, { recursive: true, force: true });
+    for (const [key, value] of [["TEMPLATES_DIR", savedEnv.dir], ["TEMPLATES_DEFAULT_DIR", savedEnv.def]] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  /** An admin override of the WP07 template: the shipped document.xml passed through `edit`. */
+  function overrideTemplate(edit: (xml: string) => string) {
+    const zip = new PizZip(shippedWp07());
+    zip.file("word/document.xml", edit(zip.file("word/document.xml")!.asText()));
+    const dir = path.join(overrideRoot, WP07_DIR);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, WP07_FILE), zip.generate({ type: "nodebuffer" }));
+  }
+
+  /** A meeting with an attendee and an open issue turned into a task. */
+  async function fullMeeting() {
+    const m = await meeting();
+    must(await updateMeeting(pm, m.id, { topic: "ทบทวนแผน {x} <b> & co", meetingDate: d("2026-12-01"), place: "ห้อง 1" }));
+    must(await addAttendee(pm, m.id, { userId: analyst.id }));
+    const it = await issue(m, { text: "ยืนยันรูปแบบรายงาน" });
+    const t = must(await createTaskFromIssue(pm, it.id, { title: "ทำรายงาน" }));
+    return { m, t };
+  }
+
+  test("only PM and ADMIN approve and revert", async () => {
+    const m = await meeting();
+    for (const u of [analyst, tl, dev, viewer, outsider, pmB]) expect(await approveMeeting(u, m.id)).toEqual(denied);
+    expect((await approveMeeting(pm, m.id)).ok).toBe(true);
+    for (const u of [analyst, tl, dev, viewer, outsider, pmB]) expect(await revertMeeting(u, m.id)).toEqual(denied);
+    expect((await revertMeeting(admin, m.id)).ok).toBe(true);
+    expect((await approveMeeting(admin, m.id)).ok).toBe(true);
+    expect((await approveMeeting(pm, "nope")).ok).toBe(false);
+    expect((await revertMeeting(pm, "nope")).ok).toBe(false);
+  });
+
+  test("approve freezes the filled WP07 as an attachment of the meeting and sets the approval fields", async () => {
+    const { m, t } = await fullMeeting();
+    const approved = must(await approveMeeting(pm, m.id));
+    expect(approved).toMatchObject({ status: "APPROVED", approvedById: pm.id });
+    expect(approved.approvedAt).toBeInstanceOf(Date);
+    const att = await prisma.attachment.findUniqueOrThrow({ where: { id: approved.approvedFileId! } });
+    expect(att).toMatchObject({
+      projectId: pid,
+      entityType: MEETING_ENTITY,
+      entityId: m.id,
+      kind: "OTHER",
+      fileName: `MEET-A_${m.code}.docx`,
+      mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      uploadedById: pm.id,
+    });
+    expect(await countStoredFiles(pid)).toBe(1);
+    const text = docText((await openFile(att.storedPath)) as Buffer);
+    expect(text).toContain("ทบทวนแผน {x} &lt;b&gt; &amp; co");
+    expect(text).toContain(t.code);
+    expect(text).toContain(analyst.fullName);
+    expect(text).toContain("☐  Draft");
+    expect(text).toContain("☑  Approved");
+    expect(text).not.toMatch(/\{(mrNo|topic|purpose|#|\/)/);
+  });
+
+  test("approve only from Draft; a second approval adds no file", async () => {
+    const m = await meeting();
+    must(await approveMeeting(pm, m.id));
+    expect((await approveMeeting(pm, m.id)).ok).toBe(false);
+    expect(await prisma.attachment.count()).toBe(1);
+    expect(await countStoredFiles(pid)).toBe(1);
+  });
+
+  test("a broken template: approve fails naming the WP and the tag; status unchanged; no file or attachment left", async () => {
+    const m = await meeting();
+    overrideTemplate((xml) => xml.replace("{purpose}", "{purpse}"));
+    const r = await approveMeeting(pm, m.id);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toContain("WP07");
+    expect(r.error).toContain("{purpose}");
+    expect(r.error).toContain("{purpse}");
+    expect((await prisma.meeting.findUniqueOrThrow({ where: { id: m.id } })).status).toBe("DRAFT");
+    expect(await prisma.attachment.count()).toBe(0);
+    expect(await countStoredFiles(pid)).toBe(0);
+
+    overrideTemplate((xml) => xml.replace("{/attendees}", "{/attendee}"));
+    const unclosed = await approveMeeting(pm, m.id);
+    expect(unclosed.ok).toBe(false);
+    expect(!unclosed.ok && unclosed.error).toContain("attendee");
+    const exported = await exportMeeting(pm, m.id);
+    expect(exported.ok).toBe(false);
+    expect(!exported.ok && exported.error).toContain("WP07");
+    expect(await countStoredFiles(pid)).toBe(0);
+  });
+
+  test("a missing template file: approve and export fail with a Thai message naming WP07", async () => {
+    const m = await meeting();
+    process.env.TEMPLATES_DEFAULT_DIR = overrideRoot; // empty: no WP07 anywhere
+    expect(await approveMeeting(pm, m.id)).toEqual({ ok: false, error: expect.stringContaining("ไม่พบไฟล์ template ของ WP07") });
+    expect(await exportMeeting(pm, m.id)).toEqual({ ok: false, error: expect.stringContaining("ไม่พบไฟล์ template ของ WP07") });
+    expect((await prisma.meeting.findUniqueOrThrow({ where: { id: m.id } })).status).toBe("DRAFT");
+  });
+
+  test("revert returns to Draft, removes the frozen attachment and its file; only from Approved; re-approval makes a new copy", async () => {
+    const m = await meeting();
+    expect((await revertMeeting(pm, m.id)).ok).toBe(false);
+    const first = must(await approveMeeting(pm, m.id));
+    const reverted = must(await revertMeeting(pm, m.id));
+    expect(reverted).toMatchObject({ status: "DRAFT", approvedAt: null, approvedById: null, approvedFileId: null });
+    expect(await prisma.attachment.count()).toBe(0);
+    expect(await countStoredFiles(pid)).toBe(0);
+    expect((await revertMeeting(pm, m.id)).ok).toBe(false);
+    // editable again
+    expect((await addItem(pm, m.id, { kind: "AGREEMENT", text: "ข้อตกลงใหม่" })).ok).toBe(true);
+    const second = must(await approveMeeting(pm, m.id));
+    expect(second.approvedFileId).not.toBe(first.approvedFileId);
+    const att = await prisma.attachment.findUniqueOrThrow({ where: { id: second.approvedFileId! } });
+    expect(docText(await openFile(att.storedPath))).toContain("ข้อตกลงใหม่");
+    expect(await countStoredFiles(pid)).toBe(1);
+  });
+
+  test("export of a Draft is filled now, for every viewer; outsiders are refused", async () => {
+    const { m } = await fullMeeting();
+    const r = must(await exportMeeting(viewer, m.id));
+    expect(r.fileName).toBe(`MEET-A_${m.code}.docx`);
+    let text = docText(r.data);
+    expect(text).toContain("☑  Draft");
+    expect(text).toContain("☐  Approved");
+    must(await updateMeeting(pm, m.id, { topic: "หัวข้อใหม่", meetingDate: d("2026-12-01") }));
+    text = docText(must(await exportMeeting(viewer, m.id)).data);
+    expect(text).toContain("หัวข้อใหม่");
+    expect(await exportMeeting(outsider, m.id)).toEqual(denied);
+    expect(await exportMeeting(pmB, m.id)).toEqual(denied);
+    expect((await exportMeeting(pm, "nope")).ok).toBe(false);
+    expect(await countStoredFiles(pid)).toBe(0);
+  });
+
+  test("export of an Approved meeting is the stored file byte for byte, also after the template and a linked task change", async () => {
+    const { m, t } = await fullMeeting();
+    const approved = must(await approveMeeting(pm, m.id));
+    const stored = await openFile((await prisma.attachment.findUniqueOrThrow({ where: { id: approved.approvedFileId! } })).storedPath);
+    const first = must(await exportMeeting(viewer, m.id));
+    expect(first.fileName).toBe(`MEET-A_${m.code}.docx`);
+    expect(first.data.equals(stored)).toBe(true);
+    expect(docText(first.data)).toContain(`ค้าง (${t.code})`);
+
+    await prisma.task.update({ where: { id: t.id }, data: { status: "DONE" } });
+    overrideTemplate((xml) => xml.replace("Purpose of meeting", "Purpose CHANGED"));
+    const later = must(await exportMeeting(viewer, m.id));
+    expect(later.data.equals(stored)).toBe(true);
+    expect(docText(later.data)).toContain(`ค้าง (${t.code})`);
+    expect(docText(later.data)).toContain("Purpose of meeting");
+  });
+
+  test("an Approved meeting whose stored file is gone: export says ไม่พบไฟล์ฉบับอนุมัติ", async () => {
+    const m = await meeting();
+    const approved = must(await approveMeeting(pm, m.id));
+    const att = await prisma.attachment.findUniqueOrThrow({ where: { id: approved.approvedFileId! } });
+    fs.rmSync(path.resolve(process.env.FILE_STORAGE_DIR ?? "./test-storage", att.storedPath));
+    expect(await exportMeeting(pm, m.id)).toEqual({ ok: false, error: "ไม่พบไฟล์ฉบับอนุมัติ" });
+    await prisma.attachment.delete({ where: { id: att.id } });
+    expect(await exportMeeting(pm, m.id)).toEqual({ ok: false, error: "ไม่พบไฟล์ฉบับอนุมัติ" });
+  });
+
+  test("the frozen copy is not among the meeting's attachments; signed copies are still accepted after approval", async () => {
+    const m = await meeting();
+    must(await approveMeeting(pm, m.id));
+    expect((await getMeeting(viewer, pid, m.code))?.attachments).toEqual([]);
+    must(
+      await addAttachment(dev, pid, { entityType: MEETING_ENTITY, entityId: m.id, kind: "SIGNED", fileName: "signed.pdf", mime: "application/pdf", data: Buffer.from("p") }),
+    );
+    const detail = await getMeeting(viewer, pid, m.code);
+    expect(detail?.attachments.map((a) => a.fileName)).toEqual(["signed.pdf"]);
+    expect(detail?.approvedFileId).not.toBeNull();
+  });
+
+  test("after approveMeeting every change is refused (header, attendees, items, links, task, delete)", async () => {
+    const m = await meeting();
+    const att = must(await addAttendee(pm, m.id, { fullName: "x" }));
+    const it = await issue(m);
+    const t = await task();
+    must(await approveMeeting(pm, m.id));
+    const before = JSON.stringify(await prisma.meeting.findUniqueOrThrow({ where: { id: m.id }, include: { attendees: true, items: true } }));
+    for (const u of [pm, analyst, admin]) {
+      expect(await updateMeeting(u, m.id, { topic: "x", meetingDate: d("2026-12-01") })).toEqual(locked);
+      expect(await addAttendee(u, m.id, { fullName: "y" })).toEqual(locked);
+      expect(await updateAttendee(u, att.id, { fullName: "y" })).toEqual(locked);
+      expect(await removeAttendee(u, att.id)).toEqual(locked);
+      expect(await addItem(u, m.id, { kind: "ISSUE", text: "y" })).toEqual(locked);
+      expect(await updateItem(u, it.id, { text: "y" })).toEqual(locked);
+      expect(await removeItem(u, it.id)).toEqual(locked);
+      expect(await linkIssueToTask(u, it.id, t.id)).toEqual(locked);
+      expect(await createTaskFromIssue(u, it.id, { title: "y" })).toEqual(locked);
+      expect(await deleteMeeting(u, m.id)).toEqual(locked);
+    }
+    const after = JSON.stringify(await prisma.meeting.findUniqueOrThrow({ where: { id: m.id }, include: { attendees: true, items: true } }));
+    expect(after).toBe(before);
+  });
+
+  test("approval waits for a write holding the meeting lock and freezes the data including it", async () => {
+    const m = await meeting();
+    const held = await holdingMeetingLock(m.id, (tx) =>
+      tx.meetingItem.create({ data: { meetingId: m.id, projectId: pid, kind: "AGREEMENT", order: 1, text: "แทรกก่อนอนุมัติ" } }),
+    );
+    const pending = approveMeeting(pm, m.id);
+    await waitForLockWaiter();
+    await held.commit();
+    const approved = must(await pending);
+    const att = await prisma.attachment.findUniqueOrThrow({ where: { id: approved.approvedFileId! } });
+    expect(docText(await openFile(att.storedPath))).toContain("แทรกก่อนอนุมัติ");
+  });
+
+  test("two concurrent approvals: one succeeds and one file is stored", async () => {
+    const m = await meeting();
+    const rs = await Promise.all([approveMeeting(pm, m.id), approveMeeting(admin, m.id)]);
+    expect(rs.filter((r) => r.ok)).toHaveLength(1);
+    expect(await prisma.attachment.count()).toBe(1);
+    expect(await countStoredFiles(pid)).toBe(1);
+  });
+
+  test("approve and revert racing: the meeting ends consistent with its frozen file", async () => {
+    const m = await meeting();
+    must(await approveMeeting(pm, m.id));
+    await Promise.all([revertMeeting(pm, m.id), approveMeeting(pm, m.id)]);
+    const now = await prisma.meeting.findUniqueOrThrow({ where: { id: m.id } });
+    const files = await prisma.attachment.count();
+    expect(now.status === "APPROVED" ? files === 1 && now.approvedFileId !== null : files === 0 && now.approvedFileId === null).toBe(true);
+    expect(await countStoredFiles(pid)).toBe(files);
   });
 });

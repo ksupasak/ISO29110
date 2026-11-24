@@ -91,6 +91,17 @@ test("a broken override template answers 422 with Thai text naming the WP and th
   expect(body).toMatch(/[ก-๙]/);
 });
 
+test("an override with a misspelled or missing tag answers 422 naming the tag", async () => {
+  const zip = new PizZip(shipped());
+  zip.file("word/document.xml", zip.file("word/document.xml")!.asText().replace("{purpose}", "{purpse}"));
+  put(root, path.join(WP07_DIR, WP07_FILE), zip.generate({ type: "nodebuffer" }));
+  const res = await download("WP07", WP07_FILE);
+  expect(res.status).toBe(422);
+  const body = await res.text();
+  expect(body).toContain("{purpose}");
+  expect(body).toContain("{purpse}");
+});
+
 test("anonymous gets 404 also for the generated template", async () => {
   const res = await download("WP07", WP07_FILE, false);
   expect(res.status).toBe(404);
