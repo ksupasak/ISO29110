@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import type { Meeting, ProjectRole, SystemRole, User } from "@prisma/client";
+import type { Meeting, Prisma, ProjectRole, SystemRole, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { countStoredFiles, resetDb } from "./setup/db";
 import { createProject } from "@/features/projects/service";
@@ -78,6 +78,43 @@ const issue = async (m: Meeting, extra: Record<string, unknown> = {}) =>
 const task = async (projectId = pid, user: User = pm) => must(await createTask(user, projectId, { title: "งาน" }));
 
 const approve = (m: Meeting) => prisma.meeting.update({ where: { id: m.id }, data: { status: "APPROVED" } });
+
+/** Wait until some session of this database is blocked on a lock (the call under test reached the row lock). */
+async function waitForLockWaiter() {
+  for (let i = 0; i < 400; i++) {
+    const [row] = await prisma.$queryRaw<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM pg_stat_activity
+      WHERE datname = current_database() AND wait_event_type = 'Lock'`;
+    if (row.n > 0) return;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("nothing waited on a lock");
+}
+
+/** Open a transaction that holds the meeting row lock (as the service does) and runs `body`; commit later. */
+async function holdingMeetingLock(meetingId: string, body: (tx: Prisma.TransactionClient) => Promise<unknown>) {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  let ready!: () => void;
+  const isReady = new Promise<void>((r) => (ready = r));
+  const done = prisma.$transaction(
+    async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Meeting" WHERE "id" = ${meetingId} FOR UPDATE`;
+      await body(tx);
+      ready();
+      await gate;
+    },
+    { timeout: 20000 },
+  );
+  done.catch(() => ready());
+  await isReady;
+  return {
+    commit: async () => {
+      release();
+      await done;
+    },
+  };
+}
 
 describe("permissions", () => {
   test("PM, AN and ADMIN create; TL, PR, VIEWER, outsiders and other projects' PM are refused", async () => {
@@ -457,6 +494,87 @@ describe("approved meetings", () => {
     const after = JSON.stringify(await prisma.meeting.findUniqueOrThrow({ where: { id: m.id }, include: { attendees: true, items: true } }));
     expect(after).toBe(before);
     expect(await prisma.task.count()).toBe(1);
+  });
+});
+
+describe("review fixes: refs of other projects, carried items", () => {
+  test("updateItem refuses an owner from another project; updateAttendee a user from another project", async () => {
+    const m = await meeting();
+    const it = await issue(m);
+    expect(await updateItem(pm, it.id, { text: "x", ownerId: pmB.id })).toEqual({ ok: false, error: "ผู้รับผิดชอบต้องเป็นสมาชิกของโครงการ" });
+    expect(await updateItem(pm, it.id, { text: "x", ownerId: outsider.id })).toEqual({ ok: false, error: "ผู้รับผิดชอบต้องเป็นสมาชิกของโครงการ" });
+    const att = must(await addAttendee(pm, m.id, { fullName: "x" }));
+    expect(await updateAttendee(pm, att.id, { userId: pmB.id })).toEqual({ ok: false, error: "ผู้เข้าร่วมที่เลือกต้องเป็นสมาชิกของโครงการ" });
+    expect((await prisma.meetingItem.findUniqueOrThrow({ where: { id: it.id } })).ownerId).toBeNull();
+    expect((await prisma.meetingAttendee.findUniqueOrThrow({ where: { id: att.id } })).userId).toBeNull();
+  });
+
+  test("removeItem refuses an issue a later meeting carried forward, naming that meeting", async () => {
+    const prev = await meeting();
+    const it = await issue(prev);
+    const next = await meeting({ previousId: prev.id });
+    expect(await removeItem(pm, it.id)).toEqual({ ok: false, error: `ลบไม่ได้: ถูกอ้างจาก ${next.code}` });
+    expect(await prisma.meetingItem.count({ where: { id: it.id } })).toBe(1);
+  });
+});
+
+describe("review fixes: races", () => {
+  test("a mutation waiting on the row lock is refused once a concurrent approval commits", async () => {
+    const m = await meeting();
+    const held = await holdingMeetingLock(m.id, (tx) => tx.meeting.update({ where: { id: m.id }, data: { status: "APPROVED" } }));
+    const pending = addItem(pm, m.id, { kind: "ISSUE", text: "แทรก" });
+    await waitForLockWaiter();
+    await held.commit();
+    expect(await pending).toEqual(locked);
+    expect(await prisma.meetingItem.count({ where: { meetingId: m.id } })).toBe(0);
+  });
+
+  test("concurrent A.previous=B and B.previous=A: at most one succeeds, never a loop", async () => {
+    const a = await meeting();
+    const b = await meeting();
+    const base = { topic: "t", meetingDate: d("2026-12-01") };
+    for (let round = 0; round < 5; round++) {
+      await prisma.meeting.updateMany({ where: { id: { in: [a.id, b.id] } }, data: { previousId: null } });
+      const [ra, rb] = await Promise.all([
+        updateMeeting(pm, a.id, { ...base, previousId: b.id }),
+        updateMeeting(pm, b.id, { ...base, previousId: a.id }),
+      ]);
+      expect([ra.ok, rb.ok].filter(Boolean)).toHaveLength(1);
+      const [sa, sb] = await Promise.all([a, b].map((x) => prisma.meeting.findUniqueOrThrow({ where: { id: x.id } })));
+      expect(sa.previousId === b.id && sb.previousId === a.id).toBe(false);
+    }
+  });
+
+  test("two concurrent addAttendee for the same member store one row", async () => {
+    const m = await meeting();
+    const rs = await Promise.all([addAttendee(pm, m.id, { userId: analyst.id }), addAttendee(analyst, m.id, { userId: analyst.id })]);
+    expect(rs.filter((r) => r.ok)).toHaveLength(1);
+    expect(rs.find((r) => !r.ok)).toEqual({ ok: false, error: "ผู้เข้าร่วมนี้มีอยู่แล้ว" });
+    expect(await prisma.meetingAttendee.count({ where: { meetingId: m.id, userId: analyst.id } })).toBe(1);
+  });
+
+  test("carry-forward waits for a concurrent item removal in the previous meeting and copies what remains", async () => {
+    const prev = await meeting();
+    const gone = await issue(prev, { text: "ถูกลบ" });
+    const kept = await issue(prev, { text: "ยังอยู่" });
+    const held = await holdingMeetingLock(prev.id, (tx) => tx.meetingItem.delete({ where: { id: gone.id } }));
+    const pending = createMeeting(pm, pid, { topic: "ครั้งถัดไป", meetingDate: d("2026-12-08"), previousId: prev.id });
+    await waitForLockWaiter();
+    await held.commit();
+    const next = must(await pending);
+    const copies = await prisma.meetingItem.findMany({ where: { meetingId: next.id } });
+    expect(copies.map((c) => [c.text, c.carriedFromId])).toEqual([["ยังอยู่", kept.id]]);
+  });
+
+  test("carry-forward from a previous meeting deleted meanwhile fails with a clear message", async () => {
+    const prev = await meeting();
+    await issue(prev);
+    const held = await holdingMeetingLock(prev.id, (tx) => tx.meeting.delete({ where: { id: prev.id } }));
+    const pending = createMeeting(pm, pid, { topic: "ครั้งถัดไป", meetingDate: d("2026-12-08"), previousId: prev.id });
+    await waitForLockWaiter();
+    await held.commit();
+    expect(await pending).toEqual({ ok: false, error: "ไม่พบการประชุมครั้งก่อน อาจถูกลบไปแล้ว" });
+    expect(await prisma.meeting.count()).toBe(0);
   });
 });
 

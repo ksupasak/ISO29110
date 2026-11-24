@@ -198,22 +198,29 @@ export async function lockDraftMeeting(tx: Prisma.TransactionClient, meetingId: 
   if (rows[0].status === "APPROVED") throw new Refusal(LOCKED);
 }
 
-/** Run `fn` in a transaction holding the draft meeting's lock; Refusals become failures, FK races "not found". */
-async function onDraft<T>(
-  meetingId: string,
-  fn: (tx: Prisma.TransactionClient) => Promise<T>,
-): Promise<ActionResult<T>> {
+/** Run `fn` in a transaction; Refusals become failures, FK races "not found". */
+async function inTx<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<ActionResult<T>> {
   try {
-    return await writing(() =>
-      prisma.$transaction(async (tx) => {
-        await lockDraftMeeting(tx, meetingId);
-        return fn(tx);
-      }),
-    );
+    return await writing(() => prisma.$transaction(fn));
   } catch (e) {
     if (e instanceof Refusal) return fail(e.message);
     throw e;
   }
+}
+
+/** Run `fn` in a transaction holding the draft meeting's lock. */
+async function onDraft<T>(
+  meetingId: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<ActionResult<T>> {
+  return inTx(async (tx) => {
+    await lockDraftMeeting(tx, meetingId);
+    return fn(tx);
+  });
+}
+
+function refuse(result: ActionResult<never>): never {
+  throw new Refusal(result.ok ? "" : result.error);
 }
 
 async function canManage(user: User, projectId: string): Promise<boolean> {
@@ -228,9 +235,14 @@ async function memberOf(projectId: string, userId: string) {
 }
 
 /** The previous meeting must be another meeting of the project, and must not lead back to `selfId`. */
-async function checkPrevious(projectId: string, previousId: string | null, selfId?: string): Promise<string | null> {
+async function checkPrevious(
+  db: Prisma.TransactionClient,
+  projectId: string,
+  previousId: string | null,
+  selfId?: string,
+): Promise<string | null> {
   if (!previousId) return null;
-  const prev = await prisma.meeting.findUnique({ where: { id: previousId }, select: { projectId: true } });
+  const prev = await db.meeting.findUnique({ where: { id: previousId }, select: { projectId: true } });
   if (!prev || prev.projectId !== projectId) return OTHER_PROJECT;
   if (selfId) {
     const seen = new Set<string>();
@@ -238,10 +250,19 @@ async function checkPrevious(projectId: string, previousId: string | null, selfI
     while (cursor && !seen.has(cursor)) {
       if (cursor === selfId) return "การประชุมครั้งก่อนต้องไม่เป็นการประชุมนี้หรือครั้งที่ตามมา";
       seen.add(cursor);
-      cursor = (await prisma.meeting.findUnique({ where: { id: cursor }, select: { previousId: true } }))?.previousId ?? null;
+      cursor = (await db.meeting.findUnique({ where: { id: cursor }, select: { previousId: true } }))?.previousId ?? null;
     }
   }
   return null;
+}
+
+/**
+ * Serialises changes to the "previous meeting" chain of one project, so two concurrent edits cannot each pass the
+ * loop check and together form a loop (A -> B and B -> A). Released at the end of the transaction.
+ */
+async function lockMeetingChain(tx: Prisma.TransactionClient, projectId: string): Promise<void> {
+  const key = `meeting-chain:${projectId}`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
 }
 
 async function taskInProject(projectId: string, taskId: string | null): Promise<boolean> {
@@ -296,42 +317,47 @@ export async function createMeeting(
   const parsed = parseInput(createSchema, input);
   if (!parsed.ok) return parsed;
   const { previousId } = parsed.data;
-  const prevError = await checkPrevious(projectId, previousId);
+  const prevError = await checkPrevious(prisma, projectId, previousId);
   if (prevError) return fail(prevError);
-  return writing(() =>
-    prisma.$transaction(async (tx) => {
-      // Carry-forward: open issues (by effective status) of the previous meeting, copied once, here.
-      const carried = previousId
-        ? (
-            await tx.meetingItem.findMany({
-              where: { meetingId: previousId, kind: "OPEN_ISSUE" },
-              include: { task: { select: { status: true } } },
-              orderBy: { order: "asc" },
-            })
-          ).filter((i) => effectiveIssueStatus(i) === "OPEN")
-        : [];
-      const code = await nextCode(tx, projectId, "MR", buddhistYearOf(parsed.data.meetingDate));
-      const meeting = await tx.meeting.create({ data: { projectId, code, ...parsed.data } });
-      if (carried.length > 0) {
-        await tx.meetingItem.createMany({
-          data: carried.map((i, idx) => ({
-            meetingId: meeting.id,
-            projectId,
-            kind: "OPEN_ISSUE" as const,
-            order: idx + 1,
-            text: i.text,
-            ownerId: i.ownerId,
-            ownerName: i.ownerName,
-            dueDate: i.dueDate,
-            status: "OPEN" as const,
-            taskId: i.taskId,
-            carriedFromId: i.id,
-          })),
-        });
-      }
-      return meeting;
-    }),
-  );
+  return inTx(async (tx) => {
+    if (previousId) {
+      // Hold the previous meeting's row lock while copying: its item edits and deletion take the same lock, so the
+      // copy sees a consistent set of issues and never points at an item deleted meanwhile.
+      const prev = await tx.$queryRaw<{ id: string }[]>`
+        SELECT "id" FROM "Meeting" WHERE "id" = ${previousId} AND "projectId" = ${projectId} FOR UPDATE`;
+      if (prev.length === 0) throw new Refusal("ไม่พบการประชุมครั้งก่อน อาจถูกลบไปแล้ว");
+    }
+    // Carry-forward: open issues (by effective status) of the previous meeting, copied once, here.
+    const carried = previousId
+      ? (
+          await tx.meetingItem.findMany({
+            where: { meetingId: previousId, kind: "OPEN_ISSUE" },
+            include: { task: { select: { status: true } } },
+            orderBy: { order: "asc" },
+          })
+        ).filter((i) => effectiveIssueStatus(i) === "OPEN")
+      : [];
+    const code = await nextCode(tx, projectId, "MR", buddhistYearOf(parsed.data.meetingDate));
+    const meeting = await tx.meeting.create({ data: { projectId, code, ...parsed.data } });
+    if (carried.length > 0) {
+      await tx.meetingItem.createMany({
+        data: carried.map((i, idx) => ({
+          meetingId: meeting.id,
+          projectId,
+          kind: "OPEN_ISSUE" as const,
+          order: idx + 1,
+          text: i.text,
+          ownerId: i.ownerId,
+          ownerName: i.ownerName,
+          dueDate: i.dueDate,
+          status: "OPEN" as const,
+          taskId: i.taskId,
+          carriedFromId: i.id,
+        })),
+      });
+    }
+    return meeting;
+  });
 }
 
 export async function updateMeeting(user: User, meetingId: string, input: MeetingInput): Promise<ActionResult<Meeting>> {
@@ -341,9 +367,19 @@ export async function updateMeeting(user: User, meetingId: string, input: Meetin
   if (stored.status === "APPROVED") return fail(LOCKED);
   const parsed = parseInput(meetingSchema, input);
   if (!parsed.ok) return parsed;
-  const prevError = await checkPrevious(stored.projectId, parsed.data.previousId, meetingId);
+  const { previousId } = parsed.data;
+  const prevError = await checkPrevious(prisma, stored.projectId, previousId, meetingId);
   if (prevError) return fail(prevError);
-  return onDraft(meetingId, (tx) => tx.meeting.update({ where: { id: meetingId }, data: parsed.data }));
+  return inTx(async (tx) => {
+    // Chain lock first, then the row lock: every caller that takes both takes them in this order.
+    if (previousId) await lockMeetingChain(tx, stored.projectId);
+    await lockDraftMeeting(tx, meetingId);
+    if (previousId) {
+      const again = await checkPrevious(tx, stored.projectId, previousId, meetingId);
+      if (again) throw new Refusal(again);
+    }
+    return tx.meeting.update({ where: { id: meetingId }, data: parsed.data });
+  });
 }
 
 export async function deleteMeeting(user: User, meetingId: string): Promise<ActionResult<null>> {
@@ -361,10 +397,7 @@ export async function deleteMeeting(user: User, meetingId: string): Promise<Acti
       }),
     ]);
     const codes = [...new Set([...followers.map((m) => m.code), ...carriers.map((i) => i.meeting.code)])];
-    if (codes.length > 0) {
-      const refused = inUse(codes);
-      throw new Refusal(refused.ok ? "" : refused.error);
-    }
+    if (codes.length > 0) refuse(inUse(codes));
     const attachments = await tx.attachment.findMany({
       where: { projectId: stored.projectId, entityType: MEETING_ENTITY, entityId: meetingId },
       select: { id: true, storedPath: true },
@@ -393,7 +426,6 @@ type AttendeeData = Omit<z.output<typeof attendeeSchema>, "fullName"> & { fullNa
 /** A member attendee gets name, position and primary-role label filled in where none was typed. */
 async function resolveAttendee(
   projectId: string,
-  meetingId: string,
   input: AttendeeInput,
   selfId?: string,
 ): Promise<ActionResult<AttendeeData>> {
@@ -406,11 +438,6 @@ async function resolveAttendee(
   }
   const member = await memberOf(projectId, a.userId);
   if (!member) return fail("ผู้เข้าร่วมที่เลือกต้องเป็นสมาชิกของโครงการ");
-  const dup = await prisma.meetingAttendee.findFirst({
-    where: { meetingId, userId: a.userId, ...(selfId ? { id: { not: selfId } } : {}) },
-    select: { id: true },
-  });
-  if (dup) return fail("ผู้เข้าร่วมนี้มีอยู่แล้ว");
   return ok({
     ...a,
     fullName: a.fullName ?? member.user.fullName,
@@ -419,18 +446,34 @@ async function resolveAttendee(
   });
 }
 
+/** A member is listed once per meeting. Call under the meeting lock so concurrent adds cannot both pass. */
+async function refuseDuplicateMember(
+  tx: Prisma.TransactionClient,
+  meetingId: string,
+  userId: string | null,
+  selfId?: string,
+): Promise<void> {
+  if (!userId) return;
+  const dup = await tx.meetingAttendee.findFirst({
+    where: { meetingId, userId, ...(selfId ? { id: { not: selfId } } : {}) },
+    select: { id: true },
+  });
+  if (dup) throw new Refusal("ผู้เข้าร่วมนี้มีอยู่แล้ว");
+}
+
 export async function addAttendee(user: User, meetingId: string, input: AttendeeInput): Promise<ActionResult<MeetingAttendee>> {
   const m = await prisma.meeting.findUnique({ where: { id: meetingId }, select: { projectId: true, status: true } });
   if (!m) return fail(NO_MEETING);
   if (!(await canManage(user, m.projectId))) return fail(FORBIDDEN);
   if (m.status === "APPROVED") return fail(LOCKED);
-  const data = await resolveAttendee(m.projectId, meetingId, input);
+  const data = await resolveAttendee(m.projectId, input);
   if (!data.ok) return data;
-  return onDraft(meetingId, async (tx) =>
-    tx.meetingAttendee.create({
+  return onDraft(meetingId, async (tx) => {
+    await refuseDuplicateMember(tx, meetingId, data.data.userId);
+    return tx.meetingAttendee.create({
       data: { ...data.data, meetingId, projectId: m.projectId, order: await nextOrder(tx, "attendee", meetingId) },
-    }),
-  );
+    });
+  });
 }
 
 export async function updateAttendee(
@@ -445,9 +488,12 @@ export async function updateAttendee(
   if (!a) return fail(NO_ATTENDEE);
   if (!(await canManage(user, a.projectId))) return fail(FORBIDDEN);
   if (a.meeting.status === "APPROVED") return fail(LOCKED);
-  const data = await resolveAttendee(a.projectId, a.meetingId, input, attendeeId);
+  const data = await resolveAttendee(a.projectId, input, attendeeId);
   if (!data.ok) return data;
-  return onDraft(a.meetingId, (tx) => tx.meetingAttendee.update({ where: { id: attendeeId }, data: data.data }));
+  return onDraft(a.meetingId, async (tx) => {
+    await refuseDuplicateMember(tx, a.meetingId, data.data.userId, attendeeId);
+    return tx.meetingAttendee.update({ where: { id: attendeeId }, data: data.data });
+  });
 }
 
 export async function removeAttendee(user: User, attendeeId: string): Promise<ActionResult<null>> {
@@ -537,10 +583,7 @@ export async function removeItem(user: User, itemId: string): Promise<ActionResu
       where: { carriedFromId: itemId },
       select: { meeting: { select: { code: true } } },
     });
-    if (carriers.length > 0) {
-      const refused = inUse([...new Set(carriers.map((c) => c.meeting.code))]);
-      throw new Refusal(refused.ok ? "" : refused.error);
-    }
+    if (carriers.length > 0) refuse(inUse([...new Set(carriers.map((c) => c.meeting.code))]));
     await tx.meetingItem.delete({ where: { id: itemId } });
     return null;
   });
