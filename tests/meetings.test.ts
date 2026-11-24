@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import PizZip from "pizzip";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Meeting, Prisma, ProjectRole, SystemRole, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { countStoredFiles, resetDb } from "./setup/db";
@@ -10,6 +10,21 @@ import { createProject } from "@/features/projects/service";
 import { createTask } from "@/features/plan/service";
 import { addAttachment } from "@/features/documents/service";
 import { openFile } from "@/lib/storage";
+
+/** Lets a test run something at the moment the service opens a stored file (to stage a race deterministically). */
+const storageHooks = vi.hoisted(() => ({ beforeOpen: null as null | ((storedPath: string) => Promise<void>) }));
+vi.mock("@/lib/storage", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/storage")>();
+  return {
+    ...real,
+    openFile: async (storedPath: string) => {
+      const hook = storageHooks.beforeOpen;
+      storageHooks.beforeOpen = null;
+      if (hook) await hook(storedPath);
+      return real.openFile(storedPath);
+    },
+  };
+});
 import {
   addAttendee,
   addItem,
@@ -220,8 +235,23 @@ describe("updateMeeting", () => {
       }),
     );
     expect(r).toMatchObject({ code: m.code, status: "DRAFT", startTime: "09:00", nextPlace: "Online", previousId: prev.id });
-    const cleared = must(await updateMeeting(pm, m.id, { topic: "Kick-off", meetingDate: d("2026-12-02") }));
-    expect(cleared).toMatchObject({ startTime: null, place: null, previousId: null, nextDate: null });
+    const cleared = must(await updateMeeting(pm, m.id, { startTime: "", place: null, previousId: "", nextDate: null }));
+    expect(cleared).toMatchObject({ startTime: null, place: null, previousId: null, nextDate: null, endTime: "10:30", topic: "Kick-off" });
+  });
+
+  test("partial update: only the given fields change; a given invalid value still fails", async () => {
+    const prev = await meeting();
+    const m = await meeting();
+    must(await updateMeeting(pm, m.id, { topic: "เดิม", meetingDate: d("2026-12-02"), startTime: "09:00", place: "ห้อง 1", previousId: prev.id }));
+    const r = must(await updateMeeting(pm, m.id, { purpose: "วัตถุประสงค์ใหม่" }));
+    expect(r).toMatchObject({ purpose: "วัตถุประสงค์ใหม่", topic: "เดิม", meetingDate: d("2026-12-02"), startTime: "09:00", place: "ห้อง 1", previousId: prev.id });
+    expect((await updateMeeting(pm, m.id, { topic: "" })).ok).toBe(false);
+    expect((await updateMeeting(pm, m.id, { meetingDate: null as unknown as Date })).ok).toBe(false);
+    expect((await updateMeeting(pm, m.id, { startTime: "9:00" })).ok).toBe(false);
+    // order is checked against the stored start time
+    expect(await updateMeeting(pm, m.id, { endTime: "08:00" })).toEqual({ ok: false, error: "เวลาสิ้นสุดต้องไม่ก่อนเวลาเริ่ม" });
+    expect((await updateMeeting(pm, m.id, { previousId: m.id })).ok).toBe(false);
+    expect(await prisma.meeting.findUniqueOrThrow({ where: { id: m.id } })).toMatchObject({ topic: "เดิม", startTime: "09:00", endTime: null, previousId: prev.id });
   });
 
   test("times must be HH:MM and end not before start", async () => {
@@ -603,8 +633,8 @@ describe("deleteMeeting", () => {
     const b = await meeting({ previousId: a.id });
     const c = await meeting({ previousId: a.id });
     expect(await deleteMeeting(pm, a.id)).toEqual({ ok: false, error: `ลบไม่ได้: ถูกอ้างจาก ${b.code}, ${c.code}` });
-    await updateMeeting(pm, b.id, { topic: "t", meetingDate: d("2026-12-01") });
-    await updateMeeting(pm, c.id, { topic: "t", meetingDate: d("2026-12-01") });
+    must(await updateMeeting(pm, b.id, { previousId: null }));
+    must(await updateMeeting(pm, c.id, { previousId: null }));
     // previousId cleared, but b and c still hold carried copies
     expect(await deleteMeeting(pm, a.id)).toEqual({ ok: false, error: `ลบไม่ได้: ถูกอ้างจาก ${b.code}, ${c.code}` });
     await prisma.meetingItem.deleteMany({ where: { meetingId: { in: [b.id, c.id] } } });
@@ -918,6 +948,59 @@ describe("approve, revert, export", () => {
     const approved = must(await pending);
     const att = await prisma.attachment.findUniqueOrThrow({ where: { id: approved.approvedFileId! } });
     expect(docText(await openFile(att.storedPath))).toContain("แทรกก่อนอนุมัติ");
+  });
+
+  test("the approval transaction failing after the file was saved leaves no file and the meeting Draft", async () => {
+    const m = await meeting();
+    // Test database only: make the attachment insert fail, i.e. after saveFile ran inside the transaction.
+    await prisma.$executeRawUnsafe(`CREATE OR REPLACE FUNCTION test_fail_attachment() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'attachment insert refused by test'; END; $$ LANGUAGE plpgsql`);
+    await prisma.$executeRawUnsafe(
+      `CREATE TRIGGER test_fail_attachment BEFORE INSERT ON "Attachment" FOR EACH ROW EXECUTE FUNCTION test_fail_attachment()`,
+    );
+    try {
+      const outcome = await approveMeeting(pm, m.id).then(
+        (r) => r,
+        (e: unknown) => e,
+      );
+      expect(outcome).not.toMatchObject({ ok: true });
+    } finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS test_fail_attachment ON "Attachment"`);
+      await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS test_fail_attachment()`);
+    }
+    expect(await countStoredFiles(pid)).toBe(0);
+    expect(await prisma.meeting.findUniqueOrThrow({ where: { id: m.id } })).toMatchObject({ status: "DRAFT", approvedFileId: null });
+    expect(await prisma.attachment.count()).toBe(0);
+  });
+
+  test("export of a meeting reverted after it was read as Approved gives the filled Draft", async () => {
+    const m = await meeting();
+    const approved = must(await approveMeeting(pm, m.id));
+    const att = await prisma.attachment.findUniqueOrThrow({ where: { id: approved.approvedFileId! } });
+    // The race: export has read the meeting as Approved; a revert commits just before it opens the frozen file.
+    storageHooks.beforeOpen = async () => {
+      must(await revertMeeting(pm, m.id));
+    };
+    const r = await exportMeeting(pm, m.id);
+    expect(await prisma.attachment.count({ where: { id: att.id } })).toBe(0);
+    expect(r.ok).toBe(true);
+    expect(r.ok && docText(r.data.data)).toContain("☑  Draft");
+  });
+
+  test("revert logs a frozen file it could not delete", async () => {
+    const m = await meeting();
+    const approved = must(await approveMeeting(pm, m.id));
+    const att = await prisma.attachment.findUniqueOrThrow({ where: { id: approved.approvedFileId! } });
+    // a stored path outside the storage root makes deleteFile throw
+    await prisma.attachment.update({ where: { id: att.id }, data: { storedPath: "../outside.docx" } });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      must(await revertMeeting(pm, m.id));
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining("../outside.docx"), expect.anything());
+    } finally {
+      spy.mockRestore();
+    }
+    fs.rmSync(path.resolve(process.env.FILE_STORAGE_DIR ?? "./test-storage", att.storedPath), { force: true });
   });
 
   test("two concurrent approvals: one succeeds and one file is stored", async () => {

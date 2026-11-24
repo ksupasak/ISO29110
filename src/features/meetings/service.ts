@@ -107,39 +107,48 @@ const optDate = z
   .date()
   .nullish()
   .transform((v) => v ?? null);
-const optTime = z
-  .string()
-  .trim()
-  .nullish()
-  .transform((v) => v || null)
-  .refine((v) => v === null || /^([01]\d|2[0-3]):[0-5]\d$/.test(v), TIME_FORMAT);
 
 const topic = z.string({ error: "กรุณากรอกหัวข้อการประชุม" }).trim().min(1, "กรุณากรอกหัวข้อการประชุม");
 const meetingDate = z.date({ error: "กรุณาระบุวันที่ประชุม" });
 
 const createSchema = z.object({ topic, meetingDate, previousId: optId });
 
-/** Every header field except code and status; absent optional fields are cleared. */
-const meetingSchema = z
-  .object({
-    topic,
-    meetingDate,
-    startTime: optTime,
-    endTime: optTime,
-    place: optStr,
-    recorder: optStr,
-    organizer: optStr,
-    purpose: optStr,
-    previousId: optId,
-    previousNote: optStr,
-    nextTopic: optStr,
-    nextDate: optDate,
-    nextStartTime: optTime,
-    nextEndTime: optTime,
-    nextPlace: optStr,
-  })
-  .refine((m) => !m.startTime || !m.endTime || m.endTime >= m.startTime, TIME_ORDER)
-  .refine((m) => !m.nextStartTime || !m.nextEndTime || m.nextEndTime >= m.nextStartTime, TIME_ORDER);
+// Partial-update fields: undefined = leave as stored; null or "" = clear.
+const keepStr = z
+  .string()
+  .trim()
+  .nullable()
+  .optional()
+  .transform((v) => (v === undefined ? undefined : v || null));
+const keepId = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((v) => (v === undefined ? undefined : v || null));
+const keepDate = z.date().nullable().optional();
+const keepTime = keepStr.refine((v) => v == null || /^([01]\d|2[0-3]):[0-5]\d$/.test(v), TIME_FORMAT);
+
+/**
+ * Header fields except code and status. Only the fields given are changed (a form posts only what it shows), so a
+ * stale page cannot overwrite fields another user edited meanwhile. Given fields are validated as before.
+ */
+const meetingSchema = z.object({
+  topic: topic.optional(),
+  meetingDate: meetingDate.optional(),
+  startTime: keepTime,
+  endTime: keepTime,
+  place: keepStr,
+  recorder: keepStr,
+  organizer: keepStr,
+  purpose: keepStr,
+  previousId: keepId,
+  previousNote: keepStr,
+  nextTopic: keepStr,
+  nextDate: keepDate,
+  nextStartTime: keepTime,
+  nextEndTime: keepTime,
+  nextPlace: keepStr,
+});
 
 const attendeeSchema = z.object({
   userId: optId,
@@ -373,7 +382,7 @@ export async function updateMeeting(user: User, meetingId: string, input: Meetin
   const parsed = parseInput(meetingSchema, input);
   if (!parsed.ok) return parsed;
   const { previousId } = parsed.data;
-  const prevError = await checkPrevious(prisma, stored.projectId, previousId, meetingId);
+  const prevError = await checkPrevious(prisma, stored.projectId, previousId ?? null, meetingId);
   if (prevError) return fail(prevError);
   return inTx(async (tx) => {
     // Chain lock first, then the row lock: every caller that takes both takes them in this order.
@@ -382,6 +391,14 @@ export async function updateMeeting(user: User, meetingId: string, input: Meetin
     if (previousId) {
       const again = await checkPrevious(tx, stored.projectId, previousId, meetingId);
       if (again) throw new Refusal(again);
+    }
+    // Time order is checked on the result: given fields over the stored ones.
+    const cur = await tx.meeting.findUniqueOrThrow({ where: { id: meetingId } });
+    const pick = <K extends keyof typeof parsed.data & keyof Meeting>(k: K) =>
+      parsed.data[k] === undefined ? cur[k] : parsed.data[k];
+    const ordered = (a: unknown, b: unknown) => !a || !b || (b as string) >= (a as string);
+    if (!ordered(pick("startTime"), pick("endTime")) || !ordered(pick("nextStartTime"), pick("nextEndTime"))) {
+      throw new Refusal(TIME_ORDER);
     }
     return tx.meeting.update({ where: { id: meetingId }, data: parsed.data });
   });
@@ -847,8 +864,26 @@ export async function revertMeeting(user: User, meetingId: string): Promise<Acti
     }
     return meeting;
   });
-  if (r.ok && removedPath) await discardFile(removedPath);
+  if (r.ok && removedPath) {
+    try {
+      await deleteFile(removedPath);
+    } catch (e) {
+      // The approval is already reverted; the orphan file needs cleaning by hand.
+      console.error(`revertMeeting: could not delete the frozen file ${removedPath}`, e);
+    }
+  }
   return r;
+}
+
+async function readFrozen(
+  file: { fileName: string; storedPath: string } | null,
+): Promise<{ fileName: string; data: Buffer } | null> {
+  if (!file) return null;
+  try {
+    return { fileName: file.fileName, data: await openFile(file.storedPath) };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -866,11 +901,17 @@ export async function exportMeeting(
   if (!m) return fail(NO_MEETING);
   if (!can(await getActor(user, m.projectId), "project.view")) return fail(FORBIDDEN);
   if (m.status === "APPROVED") {
-    if (!m.approvedFile) return fail(NO_FROZEN);
-    try {
-      return ok({ fileName: m.approvedFile.fileName, data: await openFile(m.approvedFile.storedPath) });
-    } catch {
-      return fail(NO_FROZEN);
+    const frozen = await readFrozen(m.approvedFile);
+    if (frozen) return ok(frozen);
+    // A revert may have removed the copy between our read and now: if the meeting is a Draft again, fill it.
+    const again = await prisma.meeting.findUnique({
+      where: { id: meetingId },
+      select: { status: true, approvedFile: { select: { fileName: true, storedPath: true } } },
+    });
+    if (!again) return fail(NO_MEETING);
+    if (again.status === "APPROVED") {
+      const retry = await readFrozen(again.approvedFile);
+      return retry ? ok(retry) : fail(NO_FROZEN);
     }
   }
   const src = await docSource(prisma, meetingId);

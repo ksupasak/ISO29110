@@ -65,13 +65,6 @@ export function CreateMeetingDialog({ projectId, projectCode, meetings }: { proj
 }
 
 type HeaderGroup = "header" | "purpose" | "previous" | "next";
-const GROUP_FIELDS: Record<HeaderGroup, (keyof MeetingHeaderValue)[]> = {
-  header: ["topic", "meetingDate", "startTime", "endTime", "place", "recorder", "organizer"],
-  purpose: ["purpose"],
-  previous: ["previousId", "previousNote"],
-  next: ["nextTopic", "nextDate", "nextStartTime", "nextEndTime", "nextPlace"],
-};
-const ALL_FIELDS = Object.values(GROUP_FIELDS).flat();
 const GROUP_TITLE: Record<HeaderGroup, string> = {
   header: "แก้ไขข้อมูลการประชุม",
   purpose: "แก้ไขวัตถุประสงค์",
@@ -79,7 +72,7 @@ const GROUP_TITLE: Record<HeaderGroup, string> = {
   next: "แก้ไขการประชุมครั้งต่อไป",
 };
 
-/** Edits one group of header fields; the other fields go along hidden, unchanged. */
+/** Edits one group of header fields; only those are posted, so the rest of the header is left as stored. */
 export function MeetingFieldsDialog({
   group,
   meeting,
@@ -92,7 +85,6 @@ export function MeetingFieldsDialog({
   people?: string[];
   previousOptions?: Option[];
 }) {
-  const shown = new Set(GROUP_FIELDS[group]);
   return (
     <FormDialog title={GROUP_TITLE[group]} trigger={GROUP_TITLE[group]} triggerIcon="edit" iconOnly action={updateMeetingAction}>
       {(v) => {
@@ -100,9 +92,6 @@ export function MeetingFieldsDialog({
         return (
           <>
             <input type="hidden" name="meetingId" value={meeting.id} />
-            {ALL_FIELDS.filter((k) => !shown.has(k)).map((k) => (
-              <input key={k} type="hidden" name={k} value={meeting[k]} />
-            ))}
             {group === "header" && (
               <>
                 <FloatingField id="topic" label="หัวข้อการประชุม" required defaultValue={val("topic")} />

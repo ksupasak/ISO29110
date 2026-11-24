@@ -36,24 +36,29 @@ function toState(r: Result, values?: Record<string, string>): FormState {
   return { error: r.error, values };
 }
 
+const TEXT_FIELDS = [
+  "topic",
+  "startTime",
+  "endTime",
+  "place",
+  "recorder",
+  "organizer",
+  "purpose",
+  "previousId",
+  "previousNote",
+  "nextTopic",
+  "nextStartTime",
+  "nextEndTime",
+  "nextPlace",
+] as const;
+const DATE_FIELDS = ["meetingDate", "nextDate"] as const;
+
+/** Only the fields the form holds: a dialog edits its own fields and leaves the rest of the header alone. */
 function meetingInput(fd: FormData): MeetingInput {
-  return {
-    topic: formText(fd, "topic"),
-    meetingDate: formDate(fd, "meetingDate") as Date,
-    startTime: formText(fd, "startTime"),
-    endTime: formText(fd, "endTime"),
-    place: formText(fd, "place"),
-    recorder: formText(fd, "recorder"),
-    organizer: formText(fd, "organizer"),
-    purpose: formText(fd, "purpose"),
-    previousId: formText(fd, "previousId"),
-    previousNote: formText(fd, "previousNote"),
-    nextTopic: formText(fd, "nextTopic"),
-    nextDate: formDate(fd, "nextDate"),
-    nextStartTime: formText(fd, "nextStartTime"),
-    nextEndTime: formText(fd, "nextEndTime"),
-    nextPlace: formText(fd, "nextPlace"),
-  };
+  const out: Record<string, unknown> = {};
+  for (const k of TEXT_FIELDS) if (fd.has(k)) out[k] = formText(fd, k);
+  for (const k of DATE_FIELDS) if (fd.has(k)) out[k] = formDate(fd, k);
+  return out as MeetingInput;
 }
 
 function attendeeInput(fd: FormData): AttendeeInput {
