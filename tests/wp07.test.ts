@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import PizZip from "pizzip";
-import { fillTemplate, listTags } from "@/lib/docfill";
+import { fillTemplate, tagTree } from "@/lib/docfill";
 import { GENERATED_WPS, checkTemplate, loadTemplate } from "@/features/docgen/registry";
 import { WP07, meetingDocData, type MeetingDocSource } from "@/features/meetings/wp07";
 
@@ -64,8 +64,16 @@ describe("shipped WP07 template", () => {
     expect(await checkTemplate("WP07")).toEqual({ ok: true });
   });
 
-  test("declares exactly the tags found in the file", () => {
-    expect(listTags(shipped())).toEqual(WP07.tags.map((t) => t.name).sort());
+  test("the file's tag tree is exactly the declared structure", () => {
+    const expected = Object.fromEntries(
+      WP07.structure.map((n) => [n.name, Object.fromEntries((n.inner ?? []).map((t) => [t.name, {}]))]),
+    );
+    expect(tagTree(shipped())).toEqual(expected);
+  });
+
+  test("the flat tag list for the admin card is derived from the structure", () => {
+    expect(WP07.tags.filter((t) => t.loop === "attendees").map((t) => t.name)).toEqual(["no", "name", "position", "organization", "role"]);
+    expect(WP07.tags.find((t) => t.name === "purpose")).toEqual({ name: "purpose", meaning: "1 วัตถุประสงค์การประชุม" });
   });
 
   test("the sample fills every tag: headings, table headers and sample values stay; no tag is left", () => {
@@ -128,6 +136,38 @@ describe("checkTemplate / loadTemplate with an override", () => {
       expect(r.problems.join("\n")).toContain("foo");
       expect(r.problems.join("\n")).not.toContain("purpose");
     }
+  });
+
+  async function problemsWith(edit: (xml: string) => string): Promise<string[]> {
+    override(edit);
+    const r = await checkTemplate("WP07");
+    if (r.ok) throw new Error("expected the check to fail");
+    return r.problems;
+  }
+
+  test("an inner tag removed from its loop is reported with the loop", async () => {
+    const problems = await problemsWith((xml) => xml.replace("{-w:p accomplished}{text}{/accomplished}", "{-w:p accomplished}{/accomplished}"));
+    expect(problems).toEqual(["ไม่พบเครื่องหมาย {text} ในรายการ accomplished (สิ่งที่ดำเนินการแล้วเสร็จ)"]);
+  });
+
+  test("an inner tag moved outside its loop is reported as missing in the loop and outside it", async () => {
+    // Out of the looped row (inside the same row it is still repeated with the row, so it stays inside the loop).
+    const problems = await problemsWith((xml) => xml.replace("{role}{/attendees}", "{/attendees}").replace("{absentees}", "{absentees} {role}"));
+    expect(problems).toEqual([
+      "ไม่พบเครื่องหมาย {role} ในรายการ attendees (บทบาทในโครงการ)",
+      "เครื่องหมาย {role} อยู่นอกรายการ attendees ต้องวางไว้ภายในรายการนั้น",
+    ]);
+  });
+
+  test("a loop missing entirely is reported by name", async () => {
+    const problems = await problemsWith((xml) => xml.replace("{-w:p issues}{text}{/issues}", ""));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatch(/^ไม่พบรายการซ้ำ issues /);
+  });
+
+  test("an unknown tag inside a loop is reported with the loop", async () => {
+    const problems = await problemsWith((xml) => xml.replace("{name}", "{name}{nickname}"));
+    expect(problems).toEqual(["เครื่องหมาย {nickname} ในรายการ attendees ไม่อยู่ในรายการของ WP07"]);
   });
 
   test("an unclosed tag is reported by name, not thrown", async () => {

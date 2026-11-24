@@ -102,6 +102,16 @@ describe("fillTemplate", () => {
     expect(textOf(out)).toBe(`${value.replace("\n", "")}ลำดับชื่อ1{/rows}{#x}`);
   });
 
+  test("characters illegal in XML 1.0 are stripped from values, also inside loops", () => {
+    const bad = "a\uFFFEb\uFFFFc\uD800d\u0001e\u000Bf";
+    const out = fillTemplate(docx(p("{v}") + ROWS), { v: bad, rows: [{ no: 1, name: bad }] });
+    const xml = xmlOf(out);
+    expect(xml).not.toMatch(/[\uFFFE\uFFFF\uD800-\uDFFF\u0000-\u0008\u000B\u000C\u000E-\u001F]/);
+    expect(textOf(out)).toBe("abcdefลำดับชื่อ1abcdef");
+    // valid characters outside the BMP are kept
+    expect(textOf(fillTemplate(docx(p("{v}")), { v: "ok 😀" }))).toBe("ok 😀");
+  });
+
   test("empty loops: every table cell keeps a paragraph", () => {
     const out = fillTemplate(docx(table(tc(LIST) + tc(p("x"))) + ROWS), { items: [], rows: [] });
     const xml = xmlOf(out);
@@ -116,10 +126,12 @@ describe("fillTemplate", () => {
     expect(xmlOf(out)).not.toMatch(/<\/w:tbl><\/w:tc>/);
   });
 
-  test("unclosed tag names the tag", () => {
-    const problems = problemsOf(() => fillTemplate(docx(p("{purpose")), {}));
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain("purpose");
+  test("unclosed and unopened tags are named cleanly, without the words around them", () => {
+    const unclosed = problemsOf(() => fillTemplate(docx(p("{purpose") + p("ชื่อ ผู้เข้าร่วม")), {}));
+    expect(unclosed).toHaveLength(1);
+    expect(unclosed[0]).toMatch(/^เครื่องหมาย \{purpose ไม่มีวงเล็บปิด/);
+    const unopened = problemsOf(() => fillTemplate(docx(p("วัตถุประสงค์ topic}")), {}));
+    expect(unopened[0]).toMatch(/^เครื่องหมาย topic\} ไม่มีวงเล็บเปิด/);
   });
 
   test("unopened loop, unclosed loop and mismatched loop name the tag", () => {

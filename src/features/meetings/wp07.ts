@@ -1,8 +1,8 @@
 import type { MeetingItemKind, MeetingStatus, OpenIssueStatus, TaskStatus } from "@prisma/client";
-import type { GeneratedWp } from "@/features/docgen/registry";
+import { defineGeneratedWp } from "@/features/docgen/types";
 import { formatThaiDate } from "@/lib/dates";
 import { OPEN_ISSUE_STATUS_LABEL } from "@/lib/labels";
-import { effectiveIssueStatus } from "./service";
+import { effectiveIssueStatus } from "./issue-status";
 
 /**
  * What the WP07 Meeting Record needs. A `MeetingDetail` (from the meeting service) plus the project satisfies it:
@@ -187,9 +187,9 @@ const BLANK: Record<string, unknown> = {
   nextPlace: "",
 };
 
-export const WP07: GeneratedWp = {
+export const WP07 = defineGeneratedWp({
   wpCode: "WP07",
-  tags: [
+  structure: [
     { name: "mrNo", meaning: "เลขที่บันทึกการประชุม (หัวกระดาษ)" },
     { name: "docDate", meaning: "วันที่เอกสาร = วันที่ประชุม (หัวกระดาษ)" },
     { name: "projectName", meaning: "ชื่อโครงการ" },
@@ -203,22 +203,45 @@ export const WP07: GeneratedWp = {
     { name: "draftBox", meaning: "ช่องติ๊ก Draft (☑ หรือ ☐)" },
     { name: "approvedBox", meaning: "ช่องติ๊ก Approved (☑ หรือ ☐)" },
     { name: "purpose", meaning: "1 วัตถุประสงค์การประชุม" },
-    { name: "attendees", meaning: "2 แถวผู้เข้าร่วม: {#attendees} ในช่องแรก … {/attendees} ในช่องสุดท้ายของแถวเดียว" },
-    { name: "no", meaning: "ลำดับในแถวตาราง (ผู้เข้าร่วม, ประเด็นค้าง)" },
-    { name: "name", meaning: "ชื่อ-สกุลผู้เข้าร่วม" },
-    { name: "position", meaning: "ตำแหน่งผู้เข้าร่วม" },
-    { name: "organization", meaning: "หน่วยงานผู้เข้าร่วม" },
-    { name: "role", meaning: "บทบาทในโครงการของผู้เข้าร่วม" },
+    {
+      name: "attendees",
+      meaning: "2 แถวผู้เข้าร่วม: {#attendees} ในช่องแรก … {/attendees} ในช่องสุดท้ายของแถวเดียว",
+      inner: [
+        { name: "no", meaning: "ลำดับ" },
+        { name: "name", meaning: "ชื่อ-สกุล" },
+        { name: "position", meaning: "ตำแหน่ง" },
+        { name: "organization", meaning: "หน่วยงาน" },
+        { name: "role", meaning: "บทบาทในโครงการ" },
+      ],
+    },
     { name: "absentees", meaning: "ผู้ไม่ได้เข้าร่วม คั่นด้วยจุลภาค" },
     { name: "previousRef", meaning: "4 อ้างอิงบันทึกการประชุมครั้งก่อน หรือ ไม่มี" },
-    { name: "accomplished", meaning: "5 ย่อหน้ารายการ: {-w:p accomplished}{text}{/accomplished}" },
-    { name: "text", meaning: "ข้อความของรายการ (ข้อ 5–8)" },
-    { name: "issues", meaning: "6 ย่อหน้ารายการ: {-w:p issues}{text}{/issues}" },
-    { name: "openIssues", meaning: "7 แถวประเด็นค้าง: {#openIssues} ในช่องแรก … {/openIssues} ในช่องสุดท้าย" },
-    { name: "owner", meaning: "ผู้รับผิดชอบประเด็นค้าง" },
-    { name: "due", meaning: "กำหนดชี้แจงประเด็นค้าง" },
-    { name: "status", meaning: "สถานะประเด็นค้าง เช่น ค้าง (T-012)" },
-    { name: "agreements", meaning: "8 ย่อหน้ารายการ: {-w:p agreements}{text}{/agreements}" },
+    {
+      name: "accomplished",
+      meaning: "5 ย่อหน้ารายการ: {-w:p accomplished}{text}{/accomplished}",
+      inner: [{ name: "text", meaning: "สิ่งที่ดำเนินการแล้วเสร็จ" }],
+    },
+    {
+      name: "issues",
+      meaning: "6 ย่อหน้ารายการ: {-w:p issues}{text}{/issues}",
+      inner: [{ name: "text", meaning: "ประเด็นที่เกี่ยวข้อง" }],
+    },
+    {
+      name: "openIssues",
+      meaning: "7 แถวประเด็นค้าง: {#openIssues} ในช่องแรก … {/openIssues} ในช่องสุดท้าย",
+      inner: [
+        { name: "no", meaning: "ลำดับ" },
+        { name: "text", meaning: "ประเด็นค้าง" },
+        { name: "owner", meaning: "ผู้รับผิดชอบ" },
+        { name: "due", meaning: "กำหนดชี้แจง" },
+        { name: "status", meaning: "สถานะ เช่น ค้าง (T-012)" },
+      ],
+    },
+    {
+      name: "agreements",
+      meaning: "8 ย่อหน้ารายการ: {-w:p agreements}{text}{/agreements}",
+      inner: [{ name: "text", meaning: "ข้อตกลง" }],
+    },
     { name: "nextTopic", meaning: "9 หัวข้อการประชุมครั้งต่อไป" },
     { name: "nextDate", meaning: "9 วันที่ประชุมครั้งต่อไป" },
     { name: "nextTime", meaning: "9 เวลาประชุมครั้งต่อไป" },
@@ -226,4 +249,4 @@ export const WP07: GeneratedWp = {
   ],
   sample: meetingDocData(SAMPLE),
   blank: BLANK,
-};
+});

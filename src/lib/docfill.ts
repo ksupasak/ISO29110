@@ -22,17 +22,30 @@ function partName(file: string | undefined): string {
   return ` (${file})`;
 }
 
+// Tag names are ASCII identifiers (plus loop prefixes); the library reports the raw text up to the next brace,
+// which can run into the following words, so only the identifier part next to the brace is shown.
+const NAME_CHARS = /[A-Za-z0-9_#/^.:-]/;
+function leadingName(raw: string): string {
+  let i = 0;
+  while (i < raw.length && NAME_CHARS.test(raw[i])) i++;
+  return raw.slice(0, i);
+}
+function trailingName(raw: string): string {
+  let i = raw.length;
+  while (i > 0 && NAME_CHARS.test(raw[i - 1])) i--;
+  return raw.slice(i);
+}
+
 /** One Thai line for one docxtemplater error, naming the tag it is about. */
 function describe(err: XtError): string {
   const p = err.properties ?? {};
   const tag = p.xtag ?? "";
   const where = partName(p.file);
   switch (p.id) {
-    // The library reports the text up to the next brace, which may run into the following words.
     case "unclosed_tag":
-      return `เครื่องหมายที่ขึ้นต้นด้วย "{${tag.slice(0, 30)}" ไม่มีวงเล็บปิด }${where}`;
+      return `เครื่องหมาย {${leadingName(tag)} ไม่มีวงเล็บปิด }${where}`;
     case "unopened_tag":
-      return `เครื่องหมายที่ลงท้ายด้วย "${tag.slice(-30)}}" ไม่มีวงเล็บเปิด {${where}`;
+      return `เครื่องหมาย ${trailingName(tag)}} ไม่มีวงเล็บเปิด {${where}`;
     case "duplicate_open_tag":
       return `เครื่องหมาย ${tag} มีวงเล็บเปิด { ซ้อนกัน${where}`;
     case "duplicate_close_tag":
@@ -82,22 +95,50 @@ function open(docx: Buffer): Docxtemplater {
   }
 }
 
-type TagTree = { [name: string]: TagTree };
+/** Tag name -> tags used inside it (empty for a plain tag). A loop's inner tags sit under the loop name. */
+export type TagTree = { [name: string]: TagTree };
 type TagsByPart = { document?: { tags: TagTree }; headers: { tags: TagTree }[]; footers: { tags: TagTree }[] };
+
+function merge(into: TagTree, from: TagTree): void {
+  for (const [name, inner] of Object.entries(from)) {
+    if (!name.trim()) continue;
+    into[name] ??= {};
+    merge(into[name], inner);
+  }
+}
+
+/** The nested tags of body, headers and footers merged into one tree; throws TemplateError. */
+export function tagTree(docx: Buffer): TagTree {
+  const parts = (open(docx) as unknown as { getTags(): TagsByPart }).getTags();
+  const tree: TagTree = {};
+  for (const part of [parts.document, ...parts.headers, ...parts.footers]) if (part) merge(tree, part.tags);
+  return tree;
+}
 
 /** Unique tag names (scalars, loop names and tags inside loops) of body, headers and footers, sorted. */
 export function listTags(docx: Buffer): string[] {
-  const doc = open(docx);
-  const parts = (doc as unknown as { getTags(): TagsByPart }).getTags();
   const names = new Set<string>();
   const walk = (tree: TagTree) => {
     for (const [name, inner] of Object.entries(tree)) {
-      if (name.trim()) names.add(name);
+      names.add(name);
       walk(inner);
     }
   };
-  for (const part of [parts.document, ...parts.headers, ...parts.footers]) if (part) walk(part.tags);
+  walk(tagTree(docx));
   return [...names].sort();
+}
+
+// Characters not allowed in XML 1.0 (controls except tab/LF/CR, lone surrogates, U+FFFE, U+FFFF).
+const INVALID_XML = /[^\t\n\r\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu;
+
+/** Copy of the data with every string stripped of characters XML 1.0 cannot hold. */
+function cleanData(value: unknown): unknown {
+  if (typeof value === "string") return value.replace(INVALID_XML, "");
+  if (Array.isArray(value)) return value.map(cleanData);
+  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, cleanData(v)]));
+  }
+  return value;
 }
 
 const PARA_END = /(?:<\/w:p>|<w:p(?:\s[^>]*)?\/>)$/;
@@ -111,7 +152,7 @@ function repairCells(xml: string): string {
 export function fillTemplate(docx: Buffer, data: Record<string, unknown>): Buffer {
   const doc = open(docx);
   try {
-    doc.render(data);
+    doc.render(cleanData(data));
   } catch (e) {
     throw toTemplateError(e);
   }

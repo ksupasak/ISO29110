@@ -20,6 +20,7 @@ import { fail, ok, type ActionResult } from "@/lib/result";
 import { nextCode } from "@/lib/sequence";
 import { deleteFile } from "@/lib/storage";
 import { parseInput } from "@/lib/validation";
+import { effectiveIssueStatus } from "./issue-status";
 
 /** `Attachment.entityType` of files attached to a meeting (signed copies, the approved docx). */
 export const MEETING_ENTITY = "meeting";
@@ -297,14 +298,7 @@ async function nextOrder(
   return (agg._max.order ?? 0) + 1;
 }
 
-/** Linked task decides (DONE = closed, anything else = open); without a task, the stored status. */
-export function effectiveIssueStatus(item: {
-  status: OpenIssueStatus;
-  task: { status: TaskStatus } | null;
-}): OpenIssueStatus {
-  if (item.task) return item.task.status === "DONE" ? "CLOSED" : "OPEN";
-  return item.status;
-}
+export { effectiveIssueStatus };
 
 // ---------- meetings ----------
 

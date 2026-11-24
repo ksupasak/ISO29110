@@ -103,9 +103,11 @@ export default async function TemplatesPage() {
                   </thead>
                   <tbody>
                     {g.tags.map((t) => (
-                      <tr key={t.name}>
+                      <tr key={`${t.loop ?? ""}.${t.name}`}>
                         <td className="text-nowrap">
+                          {t.loop && <span className="text-muted me-2">↳</span>}
                           <code>{`{${t.name}}`}</code>
+                          {t.loop && <span className="small text-muted ms-2">{`ในรายการ ${t.loop}`}</span>}
                         </td>
                         <td>{t.meaning}</td>
                       </tr>
