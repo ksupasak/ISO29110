@@ -1,4 +1,4 @@
-import type { ProjectRole, ProjectStatus } from "@prisma/client";
+import type { ProjectRole, ProjectStatus, TaskKind, TaskStatus } from "@prisma/client";
 import { isFinalStatus } from "@/lib/wp-catalog";
 
 export const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -46,4 +46,30 @@ const PROJECT_STATUS_VARIANT = {
 /** Bootstrap colour for a project status: planning blue, active green, closed grey. */
 export function projectStatusVariant(status: ProjectStatus): (typeof PROJECT_STATUS_VARIANT)[ProjectStatus] {
   return PROJECT_STATUS_VARIANT[status];
+}
+
+export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
+  TODO: "ยังไม่เริ่ม",
+  DOING: "กำลังทำ",
+  DONE: "เสร็จ",
+  BLOCKED: "ติดขัด",
+};
+
+export const TASK_KIND_LABEL: Record<TaskKind, string> = {
+  PLAN: "วางแผน",
+  DEV: "พัฒนา",
+  FIX: "แก้ไข",
+  REVIEW: "ทบทวน",
+};
+
+const TASK_STATUS_VARIANT = {
+  TODO: "secondary",
+  DOING: "info",
+  DONE: "success",
+  BLOCKED: "danger",
+} as const satisfies Record<TaskStatus, string>;
+
+/** Bootstrap colour for a task status: to-do grey, doing blue, done green, blocked red. */
+export function taskStatusVariant(status: TaskStatus): (typeof TASK_STATUS_VARIANT)[TaskStatus] {
+  return TASK_STATUS_VARIANT[status];
 }

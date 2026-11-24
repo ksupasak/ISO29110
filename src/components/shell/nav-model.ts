@@ -39,6 +39,7 @@ export function navSections(pathname: string, isAdmin: boolean): NavSection[] {
       links: [
         { href: base, label: "ภาพรวม", icon: "dashboard", active: pathname === base },
         { href: `${base}/documents`, label: "เอกสาร", icon: "description", active: within(pathname, `${base}/documents`) },
+        { href: `${base}/plan`, label: "แผนงาน", icon: "account_tree", active: within(pathname, `${base}/plan`) },
       ],
     });
   }
@@ -56,6 +57,12 @@ export function breadcrumbs(pathname: string): Crumb[] {
   const label = decode(code);
   if (within(pathname, `${base}/documents`)) {
     return [{ label: "โครงการ", href: "/" }, { label, href: base }, { label: "เอกสาร" }];
+  }
+  if (within(pathname, `${base}/plan`)) {
+    const rest = pathname.slice(`${base}/plan`.length).split("/").filter(Boolean);
+    const crumbs: Crumb[] = [{ label: "โครงการ", href: "/" }, { label, href: base }];
+    if (rest.length === 0) return [...crumbs, { label: "แผนงาน" }];
+    return [...crumbs, { label: "แผนงาน", href: `${base}/plan` }, { label: decode(rest[0]) }];
   }
   return [{ label: "โครงการ", href: "/" }, { label }];
 }

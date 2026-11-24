@@ -18,3 +18,13 @@ export function formNumber(formData: FormData, key: string): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : NaN;
 }
+
+/** State returned by form server actions; `values` echoes the submitted fields so a dialog can repopulate after an error. */
+export type FormState = { error?: string; ok?: boolean; values?: Record<string, string> };
+
+/** All form fields as strings, for echoing back after an error. */
+export function formValues(formData: FormData): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of formData.entries()) if (typeof v === "string") out[k] = v;
+  return out;
+}

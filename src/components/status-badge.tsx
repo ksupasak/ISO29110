@@ -1,5 +1,5 @@
-import type { ProjectRole, ProjectStatus } from "@prisma/client";
-import { ROLE_LABEL, STATUS_LABEL, docStatusVariant, projectStatusVariant } from "@/lib/labels";
+import type { ProjectRole, ProjectStatus, TaskStatus } from "@prisma/client";
+import { ROLE_LABEL, STATUS_LABEL, TASK_STATUS_LABEL, docStatusVariant, projectStatusVariant, taskStatusVariant } from "@/lib/labels";
 
 /** Soft-tinted pill; `variant` is a Bootstrap colour name (or `primary`). */
 export function StatusChip({ variant, children }: { variant: string; children: React.ReactNode }) {
@@ -23,4 +23,8 @@ export function RoleBadge({ role, primary = false }: { role: ProjectRole; primar
       {primary && " *"}
     </span>
   );
+}
+
+export function TaskStatusBadge({ status }: { status: TaskStatus }) {
+  return <StatusChip variant={taskStatusVariant(status)}>{TASK_STATUS_LABEL[status]}</StatusChip>;
 }

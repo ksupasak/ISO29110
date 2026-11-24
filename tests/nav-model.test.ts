@@ -9,13 +9,14 @@ describe("navSections", () => {
   });
 
   test("project section is present for the project overview and its documents", () => {
-    for (const path of ["/projects/ABC-1", "/projects/ABC-1/documents"]) {
+    for (const path of ["/projects/ABC-1", "/projects/ABC-1/documents", "/projects/ABC-1/plan/T-001"]) {
       const sections = navSections(path, false);
       expect(sections).toHaveLength(2);
       expect(sections[1].heading).toBe("โครงการนี้");
       expect(sections[1].links.map((l) => [l.label, l.href])).toEqual([
         ["ภาพรวม", "/projects/ABC-1"],
         ["เอกสาร", "/projects/ABC-1/documents"],
+        ["แผนงาน", "/projects/ABC-1/plan"],
       ]);
     }
   });
@@ -24,6 +25,8 @@ describe("navSections", () => {
     const active = (path: string) => navSections(path, false)[1].links.filter((l) => l.active).map((l) => l.label);
     expect(active("/projects/ABC-1")).toEqual(["ภาพรวม"]);
     expect(active("/projects/ABC-1/documents")).toEqual(["เอกสาร"]);
+    expect(active("/projects/ABC-1/plan")).toEqual(["แผนงาน"]);
+    expect(active("/projects/ABC-1/plan/T-001")).toEqual(["แผนงาน"]);
   });
 
   test("project section is absent for the create page, which activates the project list", () => {
@@ -34,7 +37,7 @@ describe("navSections", () => {
 
   test("a URL-encoded code is kept as-is in hrefs", () => {
     const hrefs = navSections("/projects/INT%2F2569", false)[1].links.map((l) => l.href);
-    expect(hrefs).toEqual(["/projects/INT%2F2569", "/projects/INT%2F2569/documents"]);
+    expect(hrefs).toEqual(["/projects/INT%2F2569", "/projects/INT%2F2569/documents", "/projects/INT%2F2569/plan"]);
   });
 });
 
@@ -66,6 +69,20 @@ describe("breadcrumbs", () => {
       { label: "โครงการ", href: "/" },
       { label: "ABC-1", href: "/projects/ABC-1" },
       { label: "เอกสาร" },
+    ]);
+  });
+
+  test("plan list and task detail", () => {
+    expect(breadcrumbs("/projects/ABC-1/plan")).toEqual([
+      { label: "โครงการ", href: "/" },
+      { label: "ABC-1", href: "/projects/ABC-1" },
+      { label: "แผนงาน" },
+    ]);
+    expect(breadcrumbs("/projects/ABC-1/plan/T-001")).toEqual([
+      { label: "โครงการ", href: "/" },
+      { label: "ABC-1", href: "/projects/ABC-1" },
+      { label: "แผนงาน", href: "/projects/ABC-1/plan" },
+      { label: "T-001" },
     ]);
   });
 
