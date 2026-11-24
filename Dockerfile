@@ -16,6 +16,7 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
     FILE_STORAGE_DIR=/data/files \
+    TEMPLATES_DEFAULT_DIR=/app/templates-default \
     NEXT_TELEMETRY_DISABLED=1
 # Standalone server first, then the full node_modules over it so that the
 # Prisma CLI (migrate deploy) and tsx (one-off seed) are available at runtime.
@@ -25,6 +26,7 @@ COPY --from=build --chown=app:app /app/public ./public
 COPY --from=build --chown=app:app /app/node_modules ./node_modules
 COPY --from=build --chown=app:app /app/package.json ./package.json
 COPY --from=build --chown=app:app /app/prisma ./prisma
+COPY --from=build --chown=app:app /app/templates-default ./templates-default
 COPY --from=build --chown=app:app /app/src/lib/auth/password.ts ./src/lib/auth/password.ts
 USER app
 EXPOSE 3000

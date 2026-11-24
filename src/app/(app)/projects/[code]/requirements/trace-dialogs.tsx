@@ -87,7 +87,7 @@ export function RequirementDialog({
             defaultValue={v.text ?? requirement?.text ?? ""}
           />
           {requirement?.status === "APPROVED" && (
-            <p className="small text-body-secondary mb-0">ข้อกำหนดที่อนุมัติแล้วแก้รายละเอียดไม่ได้ ต้องเปลี่ยนสถานะกลับก่อน</p>
+            <p className="small text-body-secondary mb-0">Requirement ที่อนุมัติแล้วแก้รายละเอียดไม่ได้ ต้องเปลี่ยนสถานะกลับก่อน</p>
           )}
           <FloatingField id="priority" label="ลำดับความสำคัญ" defaultValue={v.priority ?? requirement?.priority ?? ""} />
           <FloatingSelect

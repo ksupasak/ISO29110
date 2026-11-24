@@ -32,13 +32,14 @@ services:
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
       FILE_STORAGE_DIR: /data/files
       TEMPLATES_DIR: /data/templates
+      TEMPLATES_DEFAULT_DIR: /app/templates-default
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
       SEED_RESET_ADMIN: ${SEED_RESET_ADMIN:-}
       SETTINGS_SECRET: ${SETTINGS_SECRET:-}
     volumes:
       - files:/data/files
-      # Templates and samples are plain files on the host (read-only inside the container).
+      # Admin override folder: plain files on the host (read-only inside the container). Defaults ship in the image.
       - ./templates:/data/templates:ro
 
 volumes:

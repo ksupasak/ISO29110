@@ -28,7 +28,7 @@ export async function writing<T>(
     return ok(await run());
   } catch (e) {
     const code = typeof e === "object" && e !== null ? (e as { code?: string }).code : undefined;
-    if (code === "P2003" || code === "P2025") return fail(message);
+    if (isForeignKeyError(e) || code === "P2025") return fail(message);
     throw e;
   }
 }

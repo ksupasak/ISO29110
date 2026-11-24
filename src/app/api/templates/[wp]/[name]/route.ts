@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import { SESSION_COOKIE, getSessionUser } from "@/lib/auth/session";
+import { encodeRFC5987, readCookie } from "@/lib/http";
 import { resolveTemplateFile } from "@/lib/template-store";
 
 export const dynamic = "force-dynamic";
@@ -13,24 +14,12 @@ const MIME: Record<string, string> = {
   ".pdf": "application/pdf",
 };
 
-function readCookie(request: Request, name: string): string | undefined {
-  for (const part of (request.headers.get("cookie") ?? "").split(";")) {
-    const i = part.indexOf("=");
-    if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim();
-  }
-  return undefined;
-}
-
 function safeDecode(s: string): string {
   try {
     return decodeURIComponent(s);
   } catch {
     return s;
   }
-}
-
-function encodeRFC5987(name: string): string {
-  return encodeURIComponent(name).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 /** Any logged-in user may download; every other outcome is the same empty 404. */
