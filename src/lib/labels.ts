@@ -1,4 +1,15 @@
-import type { ProjectRole, ProjectStatus, RequirementStatus, RequirementType, TaskKind, TaskStatus, UnitTestStatus } from "@prisma/client";
+import type {
+  MeetingItemKind,
+  MeetingStatus,
+  OpenIssueStatus,
+  ProjectRole,
+  ProjectStatus,
+  RequirementStatus,
+  RequirementType,
+  TaskKind,
+  TaskStatus,
+  UnitTestStatus,
+} from "@prisma/client";
 import { isFinalStatus } from "@/lib/wp-catalog";
 
 export const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -112,3 +123,21 @@ const UNIT_TEST_VARIANT = {
 export function unitTestVariant(status: UnitTestStatus): (typeof UNIT_TEST_VARIANT)[UnitTestStatus] {
   return UNIT_TEST_VARIANT[status];
 }
+
+export const MEETING_STATUS_LABEL: Record<MeetingStatus, string> = {
+  DRAFT: "Draft",
+  APPROVED: "Approved",
+};
+
+/** The four item sections of the WP07 template (headings 5-8). */
+export const MEETING_ITEM_KIND_LABEL: Record<MeetingItemKind, string> = {
+  ACCOMPLISHED: "สิ่งที่ดำเนินการแล้วเสร็จ",
+  ISSUE: "ประเด็นที่เกี่ยวข้อง",
+  OPEN_ISSUE: "ประเด็นค้าง",
+  AGREEMENT: "ข้อตกลง",
+};
+
+export const OPEN_ISSUE_STATUS_LABEL: Record<OpenIssueStatus, string> = {
+  OPEN: "ค้าง",
+  CLOSED: "ปิดแล้ว",
+};
