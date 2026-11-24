@@ -493,3 +493,111 @@ body {
   max-height: 14rem;
   overflow-y: auto;
 }
+
+// Read-only Gantt chart on the plan page: a fixed column of task links beside a time area that scrolls sideways inside
+// its card. Row and header heights must match the SVG geometry in plan/gantt-chart.tsx (40 px header, 32 px rows).
+// Colours are Bootstrap CSS variables so the chart follows the theme.
+$gantt-header: 40px;
+$gantt-row: 32px;
+
+.gantt {
+  display: flex;
+  min-width: 0;
+  border: 1px solid var(--bs-border-color);
+  border-radius: $border-radius;
+  overflow: hidden;
+}
+
+.gantt-names {
+  flex: 0 0 9rem;
+  min-width: 0;
+  border-right: 1px solid var(--bs-border-color);
+
+  @include media-breakpoint-up(md) { flex-basis: 16rem; }
+}
+
+.gantt-names-head {
+  display: flex;
+  align-items: center;
+  height: $gantt-header;
+  padding: 0 .5rem;
+  font-size: .8125rem;
+  font-weight: 600;
+  background-color: var(--bs-tertiary-bg);
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.gantt-name {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  height: $gantt-row;
+  padding-right: .5rem;
+  font-size: .8125rem;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.gantt-name-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.gantt-svg {
+  display: block;
+  font-family: inherit;
+}
+
+.gantt-head-bg { fill: var(--bs-tertiary-bg); }
+.gantt-row-line { stroke: var(--bs-border-color); }
+.gantt-grid { stroke: var(--bs-border-color); stroke-dasharray: 2 3; }
+.gantt-grid-major { stroke: var(--bs-secondary-color); stroke-dasharray: none; stroke-opacity: .5; }
+.gantt-tick { font-size: 11px; fill: var(--bs-secondary-color); }
+.gantt-tick-major { font-weight: 600; fill: var(--bs-body-color); }
+
+.gantt-bar { fill: var(--bs-primary-bg-subtle); stroke: var(--bs-primary); stroke-width: 1; }
+.gantt-bar-late { fill: var(--bs-danger-bg-subtle); stroke: var(--bs-danger); }
+.gantt-progress { fill: var(--bs-primary); }
+.gantt-progress-late { fill: var(--bs-danger); }
+.gantt-actual { fill: var(--bs-secondary); }
+.gantt-today { stroke: var(--bs-warning); stroke-width: 2; }
+.gantt-milestone polygon { fill: var(--bs-info); }
+.gantt-milestone-line { stroke: var(--bs-info); stroke-dasharray: 4 3; }
+
+.gantt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem 1rem;
+  padding: 0;
+  margin: .75rem 0 0;
+  font-size: .8125rem;
+  color: var(--bs-secondary-color);
+  list-style: none;
+
+  li {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+  }
+}
+
+.gantt-swatch {
+  display: inline-block;
+  width: 1rem;
+  height: .625rem;
+  border-radius: 2px;
+}
+
+.gantt-swatch-planned { background-color: var(--bs-primary-bg-subtle); border: 1px solid var(--bs-primary); }
+.gantt-swatch-progress { background-color: var(--bs-primary); }
+.gantt-swatch-actual { height: .25rem; background-color: var(--bs-secondary); }
+.gantt-swatch-late { background-color: var(--bs-danger-bg-subtle); border: 1px solid var(--bs-danger); }
+.gantt-swatch-milestone { width: .625rem; background-color: var(--bs-info); border-radius: 0; transform: rotate(45deg); }
+.gantt-swatch-today { width: 2px; height: 1rem; background-color: var(--bs-warning); border-radius: 0; }
