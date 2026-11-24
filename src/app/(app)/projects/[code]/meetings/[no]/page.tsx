@@ -30,7 +30,7 @@ import {
   MeetingStatusButton,
   type MemberOption,
 } from "../meeting-dialogs";
-import { MEETING_ATTACHMENT_KIND_LABEL, isoDate, itemFormValue, meetingHeaderValue, timeRange } from "../form-values";
+import { MEETING_ATTACHMENT_KIND_LABEL, isoDate, itemFormValue, meetingHeaderValue, ownerOptionsFor, timeRange } from "../form-values";
 
 const KIND_VARIANT = { SIGNED: "success", EVIDENCE: "info", OTHER: "secondary" } as const;
 
@@ -144,7 +144,11 @@ export default async function MeetingDetailPage({ params }: PageProps<"/projects
             {editable && <MeetingFieldsDialog group="header" meeting={header} people={people} />}
             {editable && (
               <DeleteButton
-                confirmText={`ลบ ${meeting.code} ${meeting.topic}?`}
+                confirmText={
+                  meeting.attachments.length > 0
+                    ? `ลบ ${meeting.code} ${meeting.topic}? ไฟล์แนบ ${meeting.attachments.length} ไฟล์จะถูกลบไปด้วย`
+                    : `ลบ ${meeting.code} ${meeting.topic}?`
+                }
                 action={deleteMeetingAction.bind(null, meeting.id)}
                 redirectTo={`${base}/meetings`}
               />
@@ -268,6 +272,11 @@ export default async function MeetingDetailPage({ params }: PageProps<"/projects
         icon="pending_actions"
         actions={editable && <ItemDialog meetingId={meeting.id} kind="OPEN_ISSUE" members={ownerOptions} />}
       >
+        {!draft && (
+          <p className="card-body small text-body-secondary mb-0 pb-0">
+            สถานะที่แสดงเป็นสถานะปัจจุบัน (ตาม Task ที่โยงอยู่) ส่วนไฟล์ฉบับอนุมัติเก็บสถานะ ณ วันที่อนุมัติ
+          </p>
+        )}
         <div className="table-responsive">
           <table className="table table-hover align-middle">
             <thead>
@@ -308,7 +317,7 @@ export default async function MeetingDetailPage({ params }: PageProps<"/projects
                   </td>
                   {editable && (
                     <td className="text-end table-actions">
-                      <ItemDialog meetingId={meeting.id} kind="OPEN_ISSUE" item={itemFormValue(i)} members={ownerOptions} />
+                      <ItemDialog meetingId={meeting.id} kind="OPEN_ISSUE" item={itemFormValue(i)} members={ownerOptionsFor(ownerOptions, i)} />
                       {!i.task && (
                         <CreateTaskFromIssueDialog
                           itemId={i.id}

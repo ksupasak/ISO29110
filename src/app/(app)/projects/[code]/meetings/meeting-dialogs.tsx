@@ -114,6 +114,7 @@ export function MeetingFieldsDialog({
                 <FloatingSelect key={`prev-${v.previousId ?? ""}`} id="previousId" label="การประชุมครั้งก่อน" defaultValue={val("previousId")}>
                   <Opt options={previousOptions} empty="ไม่มี" />
                 </FloatingSelect>
+                <div className="form-text mt-0">ประเด็นค้างจะถูกยกมาเฉพาะตอนสร้างการประชุมเท่านั้น การเปลี่ยนการประชุมครั้งก่อนที่นี่ไม่ยกประเด็นมาเพิ่ม</div>
                 <FloatingTextarea id="previousNote" label="หมายเหตุ" rows={3} defaultValue={val("previousNote")} />
               </>
             )}

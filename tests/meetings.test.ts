@@ -10,6 +10,7 @@ import { createProject } from "@/features/projects/service";
 import { createTask } from "@/features/plan/service";
 import { addAttachment } from "@/features/documents/service";
 import { openFile } from "@/lib/storage";
+import { ownerOptionsFor } from "@/app/(app)/projects/[code]/meetings/form-values";
 
 /** Lets a test run something at the moment the service opens a stored file (to stage a race deterministically). */
 const storageHooks = vi.hoisted(() => ({ beforeOpen: null as null | ((storedPath: string) => Promise<void>) }));
@@ -135,6 +136,11 @@ async function holdingMeetingLock(meetingId: string, body: (tx: Prisma.Transacti
     commit: async () => {
       release();
       await done;
+    },
+    /** For `finally`: lets the transaction end (commit, or roll back after an error) and never throws. */
+    finish: async () => {
+      release();
+      await done.catch(() => {});
     },
   };
 }
@@ -556,15 +562,41 @@ describe("review fixes: refs of other projects, carried items", () => {
   });
 });
 
+describe("final review: an owner who left the project", () => {
+  test("editing the issue may keep the stored owner; a different non-member is still refused", async () => {
+    const m = await meeting();
+    const it = await issue(m, { ownerId: dev.id });
+    await prisma.projectMember.delete({ where: { projectId_userId: { projectId: pid, userId: dev.id } } });
+    const r = must(await updateItem(pm, it.id, { text: "แก้ข้อความ", ownerId: dev.id, ownerName: "" }));
+    expect(r).toMatchObject({ text: "แก้ข้อความ", ownerId: dev.id, ownerName: dev.fullName });
+    expect(await updateItem(pm, it.id, { text: "x", ownerId: outsider.id })).toEqual({ ok: false, error: "ผู้รับผิดชอบต้องเป็นสมาชิกของโครงการ" });
+    expect((await prisma.meetingItem.findUniqueOrThrow({ where: { id: it.id } })).ownerId).toBe(dev.id);
+  });
+
+  test("the edit form offers the stored owner even when no longer a member", () => {
+    const members = [{ id: "u1", label: "สมาชิก" }];
+    expect(ownerOptionsFor(members, { ownerId: "u1", ownerName: null })).toEqual(members);
+    expect(ownerOptionsFor(members, { ownerId: null, ownerName: "คนนอก" })).toEqual(members);
+    expect(ownerOptionsFor(members, { ownerId: "gone", ownerName: "อดีตสมาชิก" })).toEqual([
+      ...members,
+      { id: "gone", label: "อดีตสมาชิก (ไม่ได้เป็นสมาชิกแล้ว)" },
+    ]);
+  });
+});
+
 describe("review fixes: races", () => {
   test("a mutation waiting on the row lock is refused once a concurrent approval commits", async () => {
     const m = await meeting();
     const held = await holdingMeetingLock(m.id, (tx) => tx.meeting.update({ where: { id: m.id }, data: { status: "APPROVED" } }));
-    const pending = addItem(pm, m.id, { kind: "ISSUE", text: "แทรก" });
-    await waitForLockWaiter();
-    await held.commit();
-    expect(await pending).toEqual(locked);
-    expect(await prisma.meetingItem.count({ where: { meetingId: m.id } })).toBe(0);
+    try {
+      const pending = addItem(pm, m.id, { kind: "ISSUE", text: "แทรก" });
+      await waitForLockWaiter();
+      await held.commit();
+      expect(await pending).toEqual(locked);
+      expect(await prisma.meetingItem.count({ where: { meetingId: m.id } })).toBe(0);
+    } finally {
+      await held.finish();
+    }
   });
 
   test("concurrent A.previous=B and B.previous=A: at most one succeeds, never a loop", async () => {
@@ -596,23 +628,31 @@ describe("review fixes: races", () => {
     const gone = await issue(prev, { text: "ถูกลบ" });
     const kept = await issue(prev, { text: "ยังอยู่" });
     const held = await holdingMeetingLock(prev.id, (tx) => tx.meetingItem.delete({ where: { id: gone.id } }));
-    const pending = createMeeting(pm, pid, { topic: "ครั้งถัดไป", meetingDate: d("2026-12-08"), previousId: prev.id });
-    await waitForLockWaiter();
-    await held.commit();
-    const next = must(await pending);
-    const copies = await prisma.meetingItem.findMany({ where: { meetingId: next.id } });
-    expect(copies.map((c) => [c.text, c.carriedFromId])).toEqual([["ยังอยู่", kept.id]]);
+    try {
+      const pending = createMeeting(pm, pid, { topic: "ครั้งถัดไป", meetingDate: d("2026-12-08"), previousId: prev.id });
+      await waitForLockWaiter();
+      await held.commit();
+      const next = must(await pending);
+      const copies = await prisma.meetingItem.findMany({ where: { meetingId: next.id } });
+      expect(copies.map((c) => [c.text, c.carriedFromId])).toEqual([["ยังอยู่", kept.id]]);
+    } finally {
+      await held.finish();
+    }
   });
 
   test("carry-forward from a previous meeting deleted meanwhile fails with a clear message", async () => {
     const prev = await meeting();
     await issue(prev);
     const held = await holdingMeetingLock(prev.id, (tx) => tx.meeting.delete({ where: { id: prev.id } }));
-    const pending = createMeeting(pm, pid, { topic: "ครั้งถัดไป", meetingDate: d("2026-12-08"), previousId: prev.id });
-    await waitForLockWaiter();
-    await held.commit();
-    expect(await pending).toEqual({ ok: false, error: "ไม่พบการประชุมครั้งก่อน อาจถูกลบไปแล้ว" });
-    expect(await prisma.meeting.count()).toBe(0);
+    try {
+      const pending = createMeeting(pm, pid, { topic: "ครั้งถัดไป", meetingDate: d("2026-12-08"), previousId: prev.id });
+      await waitForLockWaiter();
+      await held.commit();
+      expect(await pending).toEqual({ ok: false, error: "ไม่พบการประชุมครั้งก่อน อาจถูกลบไปแล้ว" });
+      expect(await prisma.meeting.count()).toBe(0);
+    } finally {
+      await held.finish();
+    }
   });
 });
 
@@ -942,17 +982,23 @@ describe("approve, revert, export", () => {
     const held = await holdingMeetingLock(m.id, (tx) =>
       tx.meetingItem.create({ data: { meetingId: m.id, projectId: pid, kind: "AGREEMENT", order: 1, text: "แทรกก่อนอนุมัติ" } }),
     );
-    const pending = approveMeeting(pm, m.id);
-    await waitForLockWaiter();
-    await held.commit();
-    const approved = must(await pending);
-    const att = await prisma.attachment.findUniqueOrThrow({ where: { id: approved.approvedFileId! } });
-    expect(docText(await openFile(att.storedPath))).toContain("แทรกก่อนอนุมัติ");
+    try {
+      const pending = approveMeeting(pm, m.id);
+      await waitForLockWaiter();
+      await held.commit();
+      const approved = must(await pending);
+      const att = await prisma.attachment.findUniqueOrThrow({ where: { id: approved.approvedFileId! } });
+      expect(docText(await openFile(att.storedPath))).toContain("แทรกก่อนอนุมัติ");
+    } finally {
+      await held.finish();
+    }
   });
 
   test("the approval transaction failing after the file was saved leaves no file and the meeting Draft", async () => {
     const m = await meeting();
     // Test database only: make the attachment insert fail, i.e. after saveFile ran inside the transaction.
+    // (resetDb also drops this trigger, so a killed run cannot leave it behind.)
+    await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS test_fail_attachment ON "Attachment"`);
     await prisma.$executeRawUnsafe(`CREATE OR REPLACE FUNCTION test_fail_attachment() RETURNS trigger AS $$
       BEGIN RAISE EXCEPTION 'attachment insert refused by test'; END; $$ LANGUAGE plpgsql`);
     await prisma.$executeRawUnsafe(

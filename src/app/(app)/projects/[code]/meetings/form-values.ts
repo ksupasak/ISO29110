@@ -78,3 +78,15 @@ export function timeRange(start: string | null, end: string | null): string {
 
 /** Attachment kinds as the meeting page names them (a signed copy is the usual upload). */
 export const MEETING_ATTACHMENT_KIND_LABEL = { SIGNED: "ฉบับเซ็น", EVIDENCE: "หลักฐาน", OTHER: "อื่น ๆ" } as const;
+
+/**
+ * Owner choices for one open issue: the project members, plus the issue's stored owner when that user is no longer
+ * a member, so editing the issue keeps the owner instead of silently clearing it.
+ */
+export function ownerOptionsFor(
+  members: { id: string; label: string }[],
+  item: { ownerId: string | null; ownerName: string | null },
+): { id: string; label: string }[] {
+  if (!item.ownerId || members.some((m) => m.id === item.ownerId)) return members;
+  return [...members, { id: item.ownerId, label: `${item.ownerName ?? "ผู้รับผิดชอบเดิม"} (ไม่ได้เป็นสมาชิกแล้ว)` }];
+}

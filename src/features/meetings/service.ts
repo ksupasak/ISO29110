@@ -292,12 +292,20 @@ async function taskInProject(projectId: string, taskId: string | null): Promise<
   return t?.projectId === projectId;
 }
 
-/** Owner fields of an open issue: a member owner fills in the name when none was typed. */
+/**
+ * Owner fields of an open issue: a member owner fills in the name when none was typed. On update, `stored` is the
+ * item's current owner: keeping it unchanged is allowed even when that user has since left the project.
+ */
 async function resolveOwner(
   projectId: string,
   input: { ownerId: string | null; ownerName: string | null; dueDate: Date | null },
+  stored?: { ownerId: string | null; ownerName: string | null },
 ): Promise<ActionResult<{ ownerId: string | null; ownerName: string | null; dueDate: Date | null }>> {
   if (!input.ownerId) return ok(input);
+  if (stored && stored.ownerId === input.ownerId) {
+    const member = await memberOf(projectId, input.ownerId);
+    if (!member) return ok({ ...input, ownerName: input.ownerName ?? stored.ownerName });
+  }
   const member = await memberOf(projectId, input.ownerId);
   if (!member) return fail("ผู้รับผิดชอบต้องเป็นสมาชิกของโครงการ");
   return ok({ ...input, ownerName: input.ownerName ?? member.user.fullName });
@@ -565,6 +573,8 @@ async function loadItem(itemId: string) {
       kind: true,
       status: true,
       taskId: true,
+      ownerId: true,
+      ownerName: true,
       meeting: { select: { status: true } },
     },
   });
@@ -581,7 +591,7 @@ export async function updateItem(user: User, itemId: string, input: UpdateItemIn
   let fields: Partial<Pick<MeetingItem, "ownerId" | "ownerName" | "dueDate" | "status">> = {};
   if (item.kind === "OPEN_ISSUE") {
     if (item.taskId && status !== undefined && status !== item.status) return fail(STATUS_FOLLOWS_TASK);
-    const owner = await resolveOwner(item.projectId, { ownerId, ownerName, dueDate });
+    const owner = await resolveOwner(item.projectId, { ownerId, ownerName, dueDate }, item);
     if (!owner.ok) return owner;
     fields = { ...owner.data, ...(status !== undefined ? { status } : {}) };
   }
