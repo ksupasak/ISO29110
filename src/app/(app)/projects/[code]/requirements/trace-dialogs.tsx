@@ -41,6 +41,7 @@ export function AgreementItemDialog({
 export type RequirementFormValue = {
   id: string;
   code: string;
+  status: string;
   text: string;
   priority: string;
   agreementItemId: string;
@@ -77,7 +78,17 @@ export function RequirementDialog({
               </FloatingSelect>
             </>
           )}
-          <FloatingTextarea id="text" label="รายละเอียด" required rows={4} defaultValue={v.text ?? requirement?.text ?? ""} />
+          <FloatingTextarea
+            id="text"
+            label="รายละเอียด"
+            required
+            rows={4}
+            readOnly={requirement?.status === "APPROVED"}
+            defaultValue={v.text ?? requirement?.text ?? ""}
+          />
+          {requirement?.status === "APPROVED" && (
+            <p className="small text-body-secondary mb-0">ข้อกำหนดที่อนุมัติแล้วแก้รายละเอียดไม่ได้ ต้องเปลี่ยนสถานะกลับก่อน</p>
+          )}
           <FloatingField id="priority" label="ลำดับความสำคัญ" defaultValue={v.priority ?? requirement?.priority ?? ""} />
           <FloatingSelect
             key={`ag-${v.agreementItemId ?? ""}`}
@@ -97,14 +108,16 @@ export function RequirementDialog({
   );
 }
 
-export function RequirementStatusDialog({ id, status }: { id: string; status: string }) {
+export function RequirementStatusDialog({ id, status, canApprove }: { id: string; status: string; canApprove: boolean }) {
   return (
     <FormDialog title="เปลี่ยนสถานะ" trigger="เปลี่ยนสถานะ" triggerIcon="swap_horiz" action={setRequirementStatusAction}>
       {(v) => (
         <>
           <input type="hidden" name="id" value={id} />
           <FloatingSelect key={`st-${v.status ?? ""}`} id="status" label="สถานะ" defaultValue={v.status ?? status}>
-            {(Object.keys(REQUIREMENT_STATUS_LABEL) as (keyof typeof REQUIREMENT_STATUS_LABEL)[]).map((s) => (
+            {(Object.keys(REQUIREMENT_STATUS_LABEL) as (keyof typeof REQUIREMENT_STATUS_LABEL)[])
+              .filter((s) => canApprove || s !== "APPROVED")
+              .map((s) => (
               <option key={s} value={s}>{REQUIREMENT_STATUS_LABEL[s]}</option>
             ))}
           </FloatingSelect>

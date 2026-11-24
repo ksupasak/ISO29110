@@ -12,10 +12,10 @@ import {
   deleteAgreementItem,
   deleteComponent,
   deleteRequirement,
+  setComponentLinks,
   setRequirementComponents,
   setRequirementStatus,
-  setTaskComponents,
-  setTaskRequirements,
+  setTaskLinks,
   updateAgreementItem,
   updateComponent,
   updateRequirement,
@@ -108,13 +108,23 @@ export async function deleteComponentAction(id: string): Promise<FormState> {
   return toState(await deleteComponent(user, id));
 }
 
-/** Both link sets of a task in one dialog; the second is only written when the first succeeded. */
+/** Both link sets of a task in one dialog, written in one transaction. */
 export async function setTaskLinksAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
-  const taskId = formText(fd, "taskId");
-  const first = await setTaskRequirements(user, taskId, ids(fd, "requirementIds"));
-  if (!first.ok) return toState(first);
-  return toState(await setTaskComponents(user, taskId, ids(fd, "componentIds")));
+  return toState(
+    await setTaskLinks(user, formText(fd, "taskId"), {
+      requirementIds: ids(fd, "requirementIds"),
+      componentIds: ids(fd, "componentIds"),
+    }),
+  );
+}
+
+/** Requirements and tasks that point at a component, from the component page. */
+export async function setComponentLinksAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const id = formText(fd, "id");
+  if (!id) return toState(fail("ไม่พบ Component"));
+  return toState(await setComponentLinks(user, id, { requirementIds: ids(fd, "requirementIds"), taskIds: ids(fd, "taskIds") }));
 }
 
 export async function setRequirementComponentsAction(_prev: FormState, fd: FormData): Promise<FormState> {

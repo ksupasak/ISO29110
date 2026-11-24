@@ -62,10 +62,10 @@ describe("milestones", () => {
     const m2 = await createMilestone(pm, pid, { name: "ส่งมอบ 2", plannedDate: d("2027-01-01") });
     expect(m1.ok && m1.data.code).toBe("M1");
     expect(m2.ok && m2.data.code).toBe("M2");
-    expect(await createMilestone(pm, pid, { name: "x" } as never)).toMatchObject({ ok: false });
-    expect(await createMilestone(pm, pid, { name: "x", plannedDate: null } as never)).toMatchObject({ ok: false });
+    expect(await createMilestone(pm, pid, { name: "x" } as never)).toEqual({ ok: false, error: "กรุณาระบุวันตามแผน" });
+    expect(await createMilestone(pm, pid, { name: "x", plannedDate: null } as never)).toEqual({ ok: false, error: "กรุณาระบุวันตามแผน" });
     if (!m1.ok) throw new Error();
-    expect(await updateMilestone(pm, m1.data.id, { name: "x", plannedDate: null } as never)).toMatchObject({ ok: false });
+    expect(await updateMilestone(pm, m1.data.id, { name: "x", plannedDate: null } as never)).toEqual({ ok: false, error: "กรุณาระบุวันตามแผน" });
     expect(await updateMilestone(pm, m1.data.id, { name: "ใหม่", plannedDate: d("2026-12-05"), revisedDate: d("2026-12-09") })).toMatchObject({ ok: true });
     const row = await prisma.milestone.findUniqueOrThrow({ where: { id: m1.data.id } });
     expect(row.name).toBe("ใหม่");
@@ -96,9 +96,9 @@ describe("milestones", () => {
   test("a task cannot point at a milestone of another project", async () => {
     const mb = await createMilestone(pmB, pidB, { name: "b", plannedDate: d("2026-12-01") });
     if (!mb.ok) throw new Error();
-    expect(await createTask(pm, pid, { title: "t", milestoneId: mb.data.id })).toMatchObject({ ok: false });
+    expect(await createTask(pm, pid, { title: "t", milestoneId: mb.data.id })).toEqual({ ok: false, error: "ไม่พบ Milestone ในโครงการนี้" });
     const t = await task(pm, pid);
-    expect(await updateTask(pm, t.id, { title: "t", milestoneId: mb.data.id })).toMatchObject({ ok: false });
+    expect(await updateTask(pm, t.id, { title: "t", milestoneId: mb.data.id })).toEqual({ ok: false, error: "ไม่พบ Milestone ในโครงการนี้" });
   });
 });
 
@@ -120,25 +120,25 @@ describe("createTask / updateTask", () => {
   });
 
   test("assignee must be a member of the project", async () => {
-    expect(await createTask(pm, pid, { title: "x", assigneeId: outsider.id })).toMatchObject({ ok: false });
+    expect(await createTask(pm, pid, { title: "x", assigneeId: outsider.id })).toEqual({ ok: false, error: "ผู้รับผิดชอบต้องเป็นสมาชิกของโครงการ" });
     expect(await createTask(pm, pid, { title: "x", assigneeId: dev.id })).toMatchObject({ ok: true });
   });
 
   test("validation: title, percent, days, date order", async () => {
-    expect(await createTask(pm, pid, { title: "  " })).toMatchObject({ ok: false });
+    expect(await createTask(pm, pid, { title: "  " })).toEqual({ ok: false, error: "กรุณากรอกชื่องาน" });
     for (const percent of [-1, 101, 50.5]) {
-      expect(await createTask(pm, pid, { title: "x", percent })).toMatchObject({ ok: false });
+      expect(await createTask(pm, pid, { title: "x", percent })).toEqual({ ok: false, error: "ความคืบหน้า (%) ต้องเป็นจำนวนเต็ม 0-100" });
     }
     for (const plannedDays of [1.3, -0.5]) {
-      expect(await createTask(pm, pid, { title: "x", plannedDays })).toMatchObject({ ok: false });
+      expect(await createTask(pm, pid, { title: "x", plannedDays })).toEqual({ ok: false, error: "จำนวนวันต้องไม่ติดลบและเป็นทวีคูณของ 0.5" });
     }
     expect(await createTask(pm, pid, { title: "x", plannedDays: 1.5, actualDays: 2 })).toMatchObject({ ok: true });
     expect(
       await createTask(pm, pid, { title: "x", plannedStart: d("2026-12-10"), plannedEnd: d("2026-12-09") }),
-    ).toMatchObject({ ok: false });
+    ).toEqual({ ok: false, error: "วันสิ้นสุดตามแผนต้องไม่ก่อนวันเริ่ม" });
     expect(
       await createTask(pm, pid, { title: "x", actualStart: d("2026-12-10"), actualEnd: d("2026-12-09") }),
-    ).toMatchObject({ ok: false });
+    ).toEqual({ ok: false, error: "วันสิ้นสุดจริงต้องไม่ก่อนวันเริ่ม" });
   });
 
   test("status DONE forces percent 100", async () => {
@@ -151,18 +151,18 @@ describe("createTask / updateTask", () => {
 
   test("parent must be in the same project", async () => {
     const other = await task(pmB, pidB);
-    expect(await createTask(pm, pid, { title: "x", parentId: other.id })).toMatchObject({ ok: false });
+    expect(await createTask(pm, pid, { title: "x", parentId: other.id })).toEqual({ ok: false, error: "ไม่พบ Task แม่ในโครงการนี้" });
     const t = await task(pm, pid);
-    expect(await updateTask(pm, t.id, { title: "x", parentId: other.id })).toMatchObject({ ok: false });
+    expect(await updateTask(pm, t.id, { title: "x", parentId: other.id })).toEqual({ ok: false, error: "ไม่พบ Task แม่ในโครงการนี้" });
   });
 
   test("parent cycles are rejected", async () => {
     const a = await task(pm, pid);
     const b = await task(pm, pid, { parentId: a.id });
     const c = await task(pm, pid, { parentId: b.id });
-    expect(await updateTask(pm, a.id, { title: "x", parentId: a.id })).toMatchObject({ ok: false });
-    expect(await updateTask(pm, a.id, { title: "x", parentId: b.id })).toMatchObject({ ok: false });
-    expect(await updateTask(pm, a.id, { title: "x", parentId: c.id })).toMatchObject({ ok: false });
+    expect(await updateTask(pm, a.id, { title: "x", parentId: a.id })).toEqual({ ok: false, error: "Task แม่ต้องไม่เป็นตัวเองหรือเป็นลูกหลานของตัวเอง" });
+    expect(await updateTask(pm, a.id, { title: "x", parentId: b.id })).toEqual({ ok: false, error: "Task แม่ต้องไม่เป็นตัวเองหรือเป็นลูกหลานของตัวเอง" });
+    expect(await updateTask(pm, a.id, { title: "x", parentId: c.id })).toEqual({ ok: false, error: "Task แม่ต้องไม่เป็นตัวเองหรือเป็นลูกหลานของตัวเอง" });
     expect(await updateTask(pm, c.id, { title: "x", parentId: a.id })).toMatchObject({ ok: true });
   });
 
@@ -216,10 +216,10 @@ describe("updateTaskProgress", () => {
     const t = await task(pm, pid, { assigneeId: dev.id, actualStart: d("2026-12-10") });
     const r = await updateTaskProgress(dev, t.id, { status: "DONE", percent: 10 });
     expect(r.ok && r.data.percent).toBe(100);
-    expect(await updateTaskProgress(dev, t.id, { percent: 101 })).toMatchObject({ ok: false });
-    expect(await updateTaskProgress(dev, t.id, { actualDays: 0.3 })).toMatchObject({ ok: false });
+    expect(await updateTaskProgress(dev, t.id, { percent: 101 })).toEqual({ ok: false, error: "ความคืบหน้า (%) ต้องเป็นจำนวนเต็ม 0-100" });
+    expect(await updateTaskProgress(dev, t.id, { actualDays: 0.3 })).toEqual({ ok: false, error: "จำนวนวันต้องไม่ติดลบและเป็นทวีคูณของ 0.5" });
     // actualEnd before the stored actualStart
-    expect(await updateTaskProgress(dev, t.id, { actualEnd: d("2026-12-09") })).toMatchObject({ ok: false });
+    expect(await updateTaskProgress(dev, t.id, { actualEnd: d("2026-12-09") })).toEqual({ ok: false, error: "วันสิ้นสุดจริงต้องไม่ก่อนวันเริ่ม" });
   });
 });
 
@@ -304,5 +304,20 @@ describe("listMyOpenTasks", () => {
     await prisma.projectMember.delete({ where: { projectId_userId: { projectId: pid, userId: dev.id } } });
     expect(await listMyOpenTasks(dev)).toEqual([]);
     expect(await listMyOpenTasks(outsider)).toEqual([]);
+  });
+});
+
+describe("selectableParents", () => {
+  test("excludes the task and all its descendants", async () => {
+    const { selectableParents } = await import("@/app/(app)/projects/[code]/plan/form-values");
+    const tasks = [
+      { id: "a", parentId: null },
+      { id: "b", parentId: "a" },
+      { id: "c", parentId: "b" },
+      { id: "d", parentId: null },
+    ];
+    expect(selectableParents(tasks, "a").map((t) => t.id)).toEqual(["d"]);
+    expect(selectableParents(tasks, "b").map((t) => t.id)).toEqual(["a", "d"]);
+    expect(selectableParents(tasks, "c").map((t) => t.id)).toEqual(["a", "b", "d"]);
   });
 });

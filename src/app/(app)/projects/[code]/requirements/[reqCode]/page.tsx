@@ -44,7 +44,9 @@ export default async function RequirementDetailPage({ params }: PageProps<"/proj
         icon="checklist"
         actions={
           <>
-            {(manage || approve) && <RequirementStatusDialog id={req.id} status={req.status} />}
+            {(approve || (manage && req.status !== "APPROVED")) && (
+              <RequirementStatusDialog id={req.id} status={req.status} canApprove={approve} />
+            )}
             {manage && (
               <>
                 <RequirementDialog
@@ -53,6 +55,7 @@ export default async function RequirementDetailPage({ params }: PageProps<"/proj
                   requirement={{
                     id: req.id,
                     code: req.code,
+                    status: req.status,
                     text: req.text,
                     priority: req.priority ?? "",
                     agreementItemId: req.agreementItemId ?? "",

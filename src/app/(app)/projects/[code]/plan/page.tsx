@@ -35,11 +35,15 @@ export default async function PlanPage({ params, searchParams }: PageProps<"/pro
   };
 
   const canManage = can(await getActor(user, project.id), "plan.manage");
-  const [{ milestones, tasks }, members, all] = await Promise.all([
-    listPlan(user, project.id, filter),
-    listMembers(user, project.id),
-    listPlan(user, project.id),
-  ]);
+  const [all, members] = await Promise.all([listPlan(user, project.id), listMembers(user, project.id)]);
+  const { milestones } = all;
+  // The unfiltered list also feeds the dialogs, so filter the table rows in memory.
+  const tasks = all.tasks.filter(
+    (t) =>
+      (!filter.status || t.status === filter.status) &&
+      (!filter.assigneeId || t.assigneeId === filter.assigneeId) &&
+      (!filter.kind || t.kind === filter.kind),
+  );
   const memberOptions = members.map((m) => ({ id: m.userId, label: m.fullName }));
   const milestoneOptions = all.milestones.map((m) => ({ id: m.id, label: `${m.code} ${m.name}` }));
   const parentOptions = all.tasks.map((t) => ({ id: t.id, label: `${t.code} ${t.title}` }));

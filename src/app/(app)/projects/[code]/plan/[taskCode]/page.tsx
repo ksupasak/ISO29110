@@ -15,7 +15,7 @@ import { LinkDialog } from "@/components/link-dialog";
 import { ReferencePanel } from "@/components/reference-panel";
 import { TaskStatusBadge } from "@/components/status-badge";
 import { ProgressDialog, TaskDialog } from "../plan-dialogs";
-import { taskFormValue } from "../form-values";
+import { selectableParents, taskFormValue } from "../form-values";
 
 export default async function TaskDetailPage({ params }: PageProps<"/projects/[code]/plan/[taskCode]">) {
   const user = await requireUser();
@@ -75,7 +75,7 @@ export default async function TaskDetailPage({ params }: PageProps<"/projects/[c
                   task={taskFormValue(task)}
                   members={members.map((m) => ({ id: m.userId, label: m.fullName }))}
                   milestones={plan.milestones.map((m) => ({ id: m.id, label: `${m.code} ${m.name}` }))}
-                  parents={plan.tasks.map((t) => ({ id: t.id, label: `${t.code} ${t.title}` }))}
+                  parents={selectableParents(plan.tasks, task.id).map((t) => ({ id: t.id, label: `${t.code} ${t.title}` }))}
                 />
                 <DeleteButton
                   confirmText={`ลบ ${task.code} ${task.title}?`}

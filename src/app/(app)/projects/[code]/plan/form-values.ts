@@ -37,3 +37,18 @@ export function taskFormValue(t: TaskDetail): TaskFormValue {
     actualDays: t.actualDays === null ? "" : String(t.actualDays),
   };
 }
+
+/** Tasks that may become the parent of `taskId`: everything except the task itself and its descendants. */
+export function selectableParents<T extends { id: string; parentId: string | null }>(tasks: T[], taskId: string): T[] {
+  const excluded = new Set([taskId]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const t of tasks) {
+      if (t.parentId && excluded.has(t.parentId) && !excluded.has(t.id)) {
+        excluded.add(t.id);
+        grew = true;
+      }
+    }
+  }
+  return tasks.filter((t) => !excluded.has(t.id));
+}

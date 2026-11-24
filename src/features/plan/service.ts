@@ -2,7 +2,7 @@ import type { Milestone, Prisma, Task, TaskKind, TaskStatus, User } from "@prism
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { can, canUpdateTaskProgress, getActor } from "@/lib/authz";
-import { inUse, isForeignKeyError, naturalCompare } from "@/lib/in-use";
+import { inUse, isForeignKeyError, naturalCompare, writing } from "@/lib/in-use";
 import { fail, ok, type ActionResult } from "@/lib/result";
 import { nextCode } from "@/lib/sequence";
 import { parseInput } from "@/lib/validation";
@@ -147,8 +147,8 @@ export async function createMilestone(
   if (!can(await getActor(user, projectId), "plan.manage")) return fail(FORBIDDEN);
   const parsed = parseInput(milestoneSchema, input);
   if (!parsed.ok) return parsed;
-  return ok(
-    await prisma.$transaction(async (tx) => {
+  return writing(() =>
+    prisma.$transaction(async (tx) => {
       const code = await nextCode(tx, projectId, "M");
       return tx.milestone.create({ data: { projectId, code, ...parsed.data } });
     }),
@@ -165,7 +165,7 @@ export async function updateMilestone(
   if (!can(await getActor(user, m.projectId), "plan.manage")) return fail(FORBIDDEN);
   const parsed = parseInput(milestoneSchema, input);
   if (!parsed.ok) return parsed;
-  return ok(await prisma.milestone.update({ where: { id: milestoneId }, data: parsed.data }));
+  return writing(() => prisma.milestone.update({ where: { id: milestoneId }, data: parsed.data }));
 }
 
 export async function deleteMilestone(user: User, milestoneId: string): Promise<ActionResult<null>> {
@@ -237,8 +237,8 @@ export async function createTask(user: User, projectId: string, input: TaskInput
   const refs = await checkRefs(projectId, p);
   if (!refs.ok) return refs;
   const { parentId, milestoneId, assigneeId, ...rest } = { ...p, ...data };
-  return ok(
-    await prisma.$transaction(async (tx) => {
+  return writing(() =>
+    prisma.$transaction(async (tx) => {
       const code = await nextCode(tx, projectId, "T");
       return tx.task.create({
         data: {
@@ -270,7 +270,7 @@ export async function updateTask(user: User, taskId: string, input: TaskInput): 
   const refs = await checkRefs(stored.projectId, p, { id: stored.id, assigneeId: stored.assigneeId });
   if (!refs.ok) return refs;
   const data = withDonePercent(p, stored.status);
-  return ok(await prisma.task.update({ where: { id: taskId }, data: { ...p, ...data } }));
+  return writing(() => prisma.task.update({ where: { id: taskId }, data: { ...p, ...data } }));
 }
 
 /** Progress fields only: for the assignee (and PM/ADMIN). Anything else in `input` is dropped by the schema. */
@@ -288,7 +288,7 @@ export async function updateTaskProgress(
   const start = p.actualStart === undefined ? stored.actualStart : p.actualStart;
   const end = p.actualEnd === undefined ? stored.actualEnd : p.actualEnd;
   if (!orderOk(start, end)) return fail(ACTUAL_DATE_ORDER);
-  return ok(await prisma.task.update({ where: { id: taskId }, data: withDonePercent(p, stored.status) }));
+  return writing(() => prisma.task.update({ where: { id: taskId }, data: withDonePercent(p, stored.status) }));
 }
 
 export async function deleteTask(user: User, taskId: string): Promise<ActionResult<null>> {

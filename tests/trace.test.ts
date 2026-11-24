@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { ProjectRole, SystemRole, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { resetDb } from "./setup/db";
@@ -17,8 +17,10 @@ import {
   listComponents,
   listRequirements,
   setRequirementComponents,
+  setComponentLinks,
   setRequirementStatus,
   setTaskComponents,
+  setTaskLinks,
   setTaskRequirements,
   updateAgreementItem,
   updateComponent,
@@ -74,7 +76,7 @@ describe("agreement items", () => {
       expect(await createAgreementItem(u, pid, { text: "x" })).toEqual(denied);
     }
     expect(await createAgreementItem(admin, pid, { text: "x" })).toMatchObject({ ok: true });
-    expect(await createAgreementItem(an, pid, { text: " " })).toMatchObject({ ok: false });
+    expect(await createAgreementItem(an, pid, { text: " " })).toEqual({ ok: false, error: "กรุณากรอกรายละเอียด" });
   });
 
   test("update, list and cross-project refusal", async () => {
@@ -121,15 +123,15 @@ describe("requirements", () => {
   });
 
   test("validation: text and type", async () => {
-    expect(await createRequirement(an, pid, { type: "FUNCTIONAL", text: "" })).toMatchObject({ ok: false });
-    expect(await createRequirement(an, pid, { type: "OTHER" as never, text: "x" })).toMatchObject({ ok: false });
+    expect(await createRequirement(an, pid, { type: "FUNCTIONAL", text: "" })).toEqual({ ok: false, error: "กรุณากรอกรายละเอียด" });
+    expect(await createRequirement(an, pid, { type: "OTHER" as never, text: "x" })).toEqual({ ok: false, error: "ประเภท Requirement ไม่ถูกต้อง" });
   });
 
   test("agreementItemId must be in the same project (create and update)", async () => {
     const agB = await ag(anB, pidB);
-    expect(await createRequirement(an, pid, { type: "FUNCTIONAL", text: "x", agreementItemId: agB.id })).toMatchObject({ ok: false });
+    expect(await createRequirement(an, pid, { type: "FUNCTIONAL", text: "x", agreementItemId: agB.id })).toEqual({ ok: false, error: "ไม่พบรายการที่เลือกในโครงการนี้" });
     const r = await req();
-    expect(await updateRequirement(an, r.id, { text: "x", agreementItemId: agB.id })).toMatchObject({ ok: false });
+    expect(await updateRequirement(an, r.id, { text: "x", agreementItemId: agB.id })).toEqual({ ok: false, error: "ไม่พบรายการที่เลือกในโครงการนี้" });
     const own = await ag();
     expect(await updateRequirement(an, r.id, { text: "x", agreementItemId: own.id })).toMatchObject({ ok: true });
   });
@@ -151,7 +153,7 @@ describe("requirements", () => {
   test("APPROVED text cannot be edited until status is changed back", async () => {
     const r = await req({ text: "เดิม" });
     await setRequirementStatus(tl, r.id, "APPROVED");
-    expect(await updateRequirement(an, r.id, { text: "แก้" })).toMatchObject({ ok: false });
+    expect(await updateRequirement(an, r.id, { text: "แก้" })).toEqual({ ok: false, error: "ข้อกำหนดที่อนุมัติแล้วแก้ไขรายละเอียดไม่ได้ ต้องเปลี่ยนสถานะกลับก่อน" });
     // unchanged text with another field changed is fine
     expect(await updateRequirement(an, r.id, { text: "เดิม", priority: "สูง" })).toMatchObject({ ok: true });
     await setRequirementStatus(tl, r.id, "PROPOSED");
@@ -183,10 +185,10 @@ describe("components", () => {
   test("codes C01.., AN/TL manage, owner must be a member", async () => {
     expect((await comp()).code).toBe("C01");
     expect((await comp({ ownerId: pr.id, unitTestStatus: "PASSED", version: "1.0" })).code).toBe("C02");
-    expect(await createComponent(an, pid, { name: "x", ownerId: outsider.id })).toMatchObject({ ok: false });
+    expect(await createComponent(an, pid, { name: "x", ownerId: outsider.id })).toEqual({ ok: false, error: "ผู้รับผิดชอบต้องเป็นสมาชิกของโครงการ" });
     for (const u of [pm, pr, qa, viewer, outsider, anB]) expect(await createComponent(u, pid, { name: "x" })).toEqual(denied);
-    expect(await createComponent(an, pid, { name: "" })).toMatchObject({ ok: false });
-    expect(await createComponent(an, pid, { name: "x", unitTestStatus: "BAD" as never })).toMatchObject({ ok: false });
+    expect(await createComponent(an, pid, { name: "" })).toEqual({ ok: false, error: "กรุณากรอกชื่อ Component" });
+    expect(await createComponent(an, pid, { name: "x", unitTestStatus: "BAD" as never })).toEqual({ ok: false, error: "สถานะการทดสอบไม่ถูกต้อง" });
   });
 
   test("update keeps unit test status when absent; list", async () => {
@@ -250,14 +252,14 @@ describe("links", () => {
     const rB = await req({}, anB, pidB);
     const cB = await comp({}, anB, pidB);
     const own = await comp();
-    expect(await setTaskRequirements(an, t.id, [rB.id])).toMatchObject({ ok: false });
-    expect(await setTaskComponents(an, t.id, [cB.id])).toMatchObject({ ok: false });
-    expect(await setRequirementComponents(an, r.id, [cB.id])).toMatchObject({ ok: false });
-    expect(await setRequirementComponents(an, r.id, [own.id, cB.id])).toMatchObject({ ok: false });
+    expect(await setTaskRequirements(an, t.id, [rB.id])).toEqual({ ok: false, error: "ไม่พบรายการที่เลือกในโครงการนี้" });
+    expect(await setTaskComponents(an, t.id, [cB.id])).toEqual({ ok: false, error: "ไม่พบรายการที่เลือกในโครงการนี้" });
+    expect(await setRequirementComponents(an, r.id, [cB.id])).toEqual({ ok: false, error: "ไม่พบรายการที่เลือกในโครงการนี้" });
+    expect(await setRequirementComponents(an, r.id, [own.id, cB.id])).toEqual({ ok: false, error: "ไม่พบรายการที่เลือกในโครงการนี้" });
     expect(await prisma.requirementComponent.count()).toBe(0);
     expect(await prisma.taskRequirement.count()).toBe(0);
     expect(await prisma.taskComponent.count()).toBe(0);
-    expect(await setTaskRequirements(an, t.id, ["nope"])).toMatchObject({ ok: false });
+    expect(await setTaskRequirements(an, t.id, ["nope"])).toEqual({ ok: false, error: "ไม่พบรายการที่เลือกในโครงการนี้" });
     // and the owning item of another project cannot be reached either
     const tB = await task(pidB, pmB);
     expect(await setTaskRequirements(an, tB.id, [rB.id])).toEqual(denied);
@@ -268,7 +270,7 @@ describe("links", () => {
     const r = await req();
     const rB = await req({}, anB, pidB);
     await setTaskRequirements(an, t.id, [r.id]);
-    expect(await setTaskRequirements(an, t.id, [rB.id])).toMatchObject({ ok: false });
+    expect(await setTaskRequirements(an, t.id, [rB.id])).toEqual({ ok: false, error: "ไม่พบรายการที่เลือกในโครงการนี้" });
     expect(await prisma.taskRequirement.count({ where: { taskId: t.id } })).toBe(1);
   });
 
@@ -282,6 +284,67 @@ describe("links", () => {
     await setTaskRequirements(an, t.id, []);
     await setTaskComponents(an, t.id, []);
     expect(await deleteTask(pm, t.id)).toMatchObject({ ok: true });
+  });
+});
+
+describe("combined link setters", () => {
+  const NOT_IN_PROJECT = { ok: false, error: "ไม่พบรายการที่เลือกในโครงการนี้" };
+
+  test("setTaskLinks writes both sets; an invalid component id leaves the requirement links unchanged", async () => {
+    const t = await task();
+    const r1 = await req();
+    const r2 = await req();
+    const c = await comp();
+    const cB = await comp({}, anB, pidB);
+    expect(await setTaskLinks(an, t.id, { requirementIds: [r1.id], componentIds: [c.id] })).toEqual({ ok: true, data: null });
+    expect(await setTaskLinks(an, t.id, { requirementIds: [r1.id], componentIds: [c.id] })).toEqual({ ok: true, data: null });
+    expect(await setTaskLinks(an, t.id, { requirementIds: [r2.id], componentIds: [cB.id] })).toEqual(NOT_IN_PROJECT);
+    const reqs = await prisma.taskRequirement.findMany({ where: { taskId: t.id } });
+    expect(reqs.map((x) => x.requirementId)).toEqual([r1.id]);
+    expect(await prisma.taskComponent.count({ where: { taskId: t.id } })).toBe(1);
+    expect(await setTaskLinks(an, t.id, { requirementIds: [], componentIds: [] })).toEqual({ ok: true, data: null });
+    expect(await prisma.taskRequirement.count()).toBe(0);
+  });
+
+  test("setTaskLinks: only AN/TL, unknown task", async () => {
+    const t = await task();
+    for (const u of [pm, pr, qa, viewer, outsider, anB]) {
+      expect(await setTaskLinks(u, t.id, { requirementIds: [], componentIds: [] })).toEqual(denied);
+    }
+    expect(await setTaskLinks(tl, t.id, { requirementIds: [], componentIds: [] })).toMatchObject({ ok: true });
+    expect(await setTaskLinks(an, "nope", { requirementIds: [], componentIds: [] })).toEqual({ ok: false, error: "ไม่พบ Task" });
+  });
+
+  test("setComponentLinks sets requirements and tasks, rejects other projects and other roles, and is atomic", async () => {
+    const c = await comp();
+    const r = await req();
+    const t = await task();
+    const rB = await req({}, anB, pidB);
+    const tB = await task(pidB, pmB);
+    expect(await setComponentLinks(an, c.id, { requirementIds: [r.id], taskIds: [t.id] })).toEqual({ ok: true, data: null });
+    expect(await prisma.requirementComponent.count({ where: { componentId: c.id } })).toBe(1);
+    expect(await prisma.taskComponent.count({ where: { componentId: c.id } })).toBe(1);
+    expect((await prisma.requirementComponent.findFirstOrThrow()).projectId).toBe(pid);
+    expect(await setComponentLinks(an, c.id, { requirementIds: [], taskIds: [tB.id] })).toEqual(NOT_IN_PROJECT);
+    expect(await setComponentLinks(an, c.id, { requirementIds: [rB.id], taskIds: [] })).toEqual(NOT_IN_PROJECT);
+    expect(await prisma.requirementComponent.count({ where: { componentId: c.id } })).toBe(1);
+    expect(await prisma.taskComponent.count({ where: { componentId: c.id } })).toBe(1);
+    for (const u of [pm, pr, qa, viewer, outsider, anB]) {
+      expect(await setComponentLinks(u, c.id, { requirementIds: [], taskIds: [] })).toEqual(denied);
+    }
+    expect(await setComponentLinks(an, "nope", { requirementIds: [], taskIds: [] })).toEqual({ ok: false, error: "ไม่พบ Component" });
+    expect(await setComponentLinks(an, c.id, { requirementIds: [], taskIds: [] })).toEqual({ ok: true, data: null });
+    expect(await prisma.taskComponent.count()).toBe(0);
+  });
+
+  test("a row deleted between the check and the write is reported, not thrown", async () => {
+    const t = await task();
+    const spy = vi.spyOn(prisma.requirement, "findMany").mockResolvedValueOnce([{ projectId: pid }] as never);
+    try {
+      expect(await setTaskRequirements(an, t.id, ["ghost"])).toEqual(NOT_IN_PROJECT);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

@@ -77,7 +77,7 @@ export function taskStatusVariant(status: TaskStatus): (typeof TASK_STATUS_VARIA
 export const REQUIREMENT_STATUS_LABEL: Record<RequirementStatus, string> = {
   PROPOSED: "เสนอ",
   APPROVED: "อนุมัติ",
-  DROPPED: "ยกเลิก",
+  DROPPED: "ตัดออก",
 };
 
 export const REQUIREMENT_TYPE_LABEL: Record<RequirementType, string> = {

@@ -11,7 +11,7 @@ import type {
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { can, getActor } from "@/lib/authz";
-import { inUse, isForeignKeyError, naturalCompare } from "@/lib/in-use";
+import { inUse, isForeignKeyError, naturalCompare, writing } from "@/lib/in-use";
 import { fail, ok, type ActionResult } from "@/lib/result";
 import { nextCode } from "@/lib/sequence";
 import { parseInput } from "@/lib/validation";
@@ -60,6 +60,7 @@ export type ComponentDetail = ComponentRow & {
   tasks: TaskRef[];
   /** Linked directly or through one of the tasks, each once. */
   requirements: { id: string; code: string; text: string }[];
+  directRequirementIds: string[];
 };
 
 // ---------- schemas ----------
@@ -122,20 +123,6 @@ async function ownerIsMember(projectId: string, userId: string | null): Promise<
   }));
 }
 
-/** Every id must exist and belong to `projectId`. */
-async function allInProject(
-  model: "requirement" | "component",
-  projectId: string,
-  ids: string[],
-): Promise<boolean> {
-  if (ids.length === 0) return true;
-  const rows: { projectId: string }[] =
-    model === "requirement"
-      ? await prisma.requirement.findMany({ where: { id: { in: ids } }, select: { projectId: true } })
-      : await prisma.component.findMany({ where: { id: { in: ids } }, select: { projectId: true } });
-  return rows.length === ids.length && rows.every((r) => r.projectId === projectId);
-}
-
 const unique = (ids: string[]) => [...new Set(ids)];
 const byCode = <T extends { code: string }>(a: T, b: T) => naturalCompare(a.code, b.code);
 
@@ -149,8 +136,8 @@ export async function createAgreementItem(
   if (!(await canManage(user, projectId))) return fail(FORBIDDEN);
   const parsed = parseInput(agreementSchema, input);
   if (!parsed.ok) return parsed;
-  return ok(
-    await prisma.$transaction(async (tx) => {
+  return writing(() =>
+    prisma.$transaction(async (tx) => {
       const code = await nextCode(tx, projectId, "AG");
       return tx.agreementItem.create({ data: { projectId, code, ...parsed.data } });
     }),
@@ -167,7 +154,7 @@ export async function updateAgreementItem(
   if (!(await canManage(user, row.projectId))) return fail(FORBIDDEN);
   const parsed = parseInput(agreementSchema, input);
   if (!parsed.ok) return parsed;
-  return ok(await prisma.agreementItem.update({ where: { id }, data: parsed.data }));
+  return writing(() => prisma.agreementItem.update({ where: { id }, data: parsed.data }));
 }
 
 export async function deleteAgreementItem(user: User, id: string): Promise<ActionResult<null>> {
@@ -203,8 +190,8 @@ export async function createRequirement(
   if (!parsed.ok) return parsed;
   if (!(await agreementInProject(projectId, parsed.data.agreementItemId))) return fail(OTHER_PROJECT);
   const prefix = parsed.data.type === "FUNCTIONAL" ? "REQ-F" : "REQ-N";
-  return ok(
-    await prisma.$transaction(async (tx) => {
+  return writing(() =>
+    prisma.$transaction(async (tx) => {
       const code = await nextCode(tx, projectId, prefix);
       return tx.requirement.create({ data: { projectId, code, ...parsed.data } });
     }),
@@ -223,7 +210,7 @@ export async function updateRequirement(
   if (!parsed.ok) return parsed;
   if (stored.status === "APPROVED" && parsed.data.text !== stored.text) return fail(APPROVED_LOCKED);
   if (!(await agreementInProject(stored.projectId, parsed.data.agreementItemId))) return fail(OTHER_PROJECT);
-  return ok(await prisma.requirement.update({ where: { id }, data: parsed.data }));
+  return writing(() => prisma.requirement.update({ where: { id }, data: parsed.data }));
 }
 
 /**
@@ -244,7 +231,7 @@ export async function setRequirementStatus(
     ? can(actor, "requirement.approve")
     : can(actor, "requirement.approve") || can(actor, "trace.manage");
   if (!allowed) return fail(FORBIDDEN);
-  return ok(await prisma.requirement.update({ where: { id }, data: { status } }));
+  return writing(() => prisma.requirement.update({ where: { id }, data: { status } }));
 }
 
 export async function deleteRequirement(user: User, id: string): Promise<ActionResult<null>> {
@@ -343,8 +330,8 @@ export async function createComponent(
   const parsed = parseInput(componentSchema, input);
   if (!parsed.ok) return parsed;
   if (!(await ownerIsMember(projectId, parsed.data.ownerId))) return fail("ผู้รับผิดชอบต้องเป็นสมาชิกของโครงการ");
-  return ok(
-    await prisma.$transaction(async (tx) => {
+  return writing(() =>
+    prisma.$transaction(async (tx) => {
       const code = await nextCode(tx, projectId, "C");
       return tx.component.create({ data: { projectId, code, ...parsed.data } });
     }),
@@ -365,7 +352,7 @@ export async function updateComponent(
   if (parsed.data.ownerId !== stored.ownerId && !(await ownerIsMember(stored.projectId, parsed.data.ownerId))) {
     return fail("ผู้รับผิดชอบต้องเป็นสมาชิกของโครงการ");
   }
-  return ok(await prisma.component.update({ where: { id }, data: parsed.data }));
+  return writing(() => prisma.component.update({ where: { id }, data: parsed.data }));
 }
 
 export async function deleteComponent(user: User, id: string): Promise<ActionResult<null>> {
@@ -440,55 +427,93 @@ export async function getComponent(user: User, projectId: string, code: string):
     ...toComponentRow(c),
     tasks: c.tasks.map((t) => ({ id: t.task.id, code: t.task.code, title: t.task.title })).sort(byCode),
     requirements: [...requirements.values()].sort(byCode),
+    directRequirementIds: c.requirements.map((r) => r.requirement.id),
   };
 }
 
 // ---------- links (replace-all) ----------
 
-/** Rejects ids of another project before anything is written; the join rows always take the owner's project id. */
+type Model = "requirement" | "component" | "task";
+
+/** Every id must exist and belong to `projectId`. */
+async function allInProject(model: Model, projectId: string, ids: string[]): Promise<boolean> {
+  if (ids.length === 0) return true;
+  const where = { id: { in: ids } };
+  const select = { projectId: true };
+  const rows: { projectId: string }[] =
+    model === "requirement"
+      ? await prisma.requirement.findMany({ where, select })
+      : model === "component"
+        ? await prisma.component.findMany({ where, select })
+        : await prisma.task.findMany({ where, select });
+  return rows.length === ids.length && rows.every((r) => r.projectId === projectId);
+}
+
+/**
+ * Replaces link sets of one owner. Ids of another project are rejected before anything is written; all sets are
+ * written in one transaction, and the join rows always take the owner's project id.
+ */
 async function replaceLinks(
   user: User,
   owner: { projectId: string } | null,
-  model: "requirement" | "component",
-  ids: string[],
-  write: (tx: Prisma.TransactionClient, projectId: string, ids: string[]) => Promise<unknown>,
   notFound: string,
+  checks: { model: Model; ids: string[] }[],
+  write: (tx: Prisma.TransactionClient, projectId: string) => Promise<unknown>,
 ): Promise<ActionResult<null>> {
   if (!owner) return fail(notFound);
   if (!(await canManage(user, owner.projectId))) return fail(FORBIDDEN);
-  const wanted = unique(ids);
-  if (!(await allInProject(model, owner.projectId, wanted))) return fail(OTHER_PROJECT);
-  await prisma.$transaction((tx) => write(tx, owner.projectId, wanted));
-  return ok(null);
+  for (const c of checks) {
+    if (!(await allInProject(c.model, owner.projectId, c.ids))) return fail(OTHER_PROJECT);
+  }
+  return writing(async () => {
+    await prisma.$transaction((tx) => write(tx, owner.projectId));
+    return null;
+  });
 }
 
 export async function setTaskRequirements(user: User, taskId: string, requirementIds: string[]): Promise<ActionResult<null>> {
-  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
-  return replaceLinks(
-    user,
-    task,
-    "requirement",
-    requirementIds,
-    async (tx, projectId, ids) => {
-      await tx.taskRequirement.deleteMany({ where: { taskId } });
-      await tx.taskRequirement.createMany({ data: ids.map((requirementId) => ({ taskId, requirementId, projectId })) });
-    },
-    "ไม่พบ Task",
-  );
+  return setTaskLinksInternal(user, taskId, { requirementIds });
 }
 
 export async function setTaskComponents(user: User, taskId: string, componentIds: string[]): Promise<ActionResult<null>> {
+  return setTaskLinksInternal(user, taskId, { componentIds });
+}
+
+/** Both link sets of a task in one transaction: either both change or neither does. */
+export async function setTaskLinks(
+  user: User,
+  taskId: string,
+  input: { requirementIds: string[]; componentIds: string[] },
+): Promise<ActionResult<null>> {
+  return setTaskLinksInternal(user, taskId, input);
+}
+
+async function setTaskLinksInternal(
+  user: User,
+  taskId: string,
+  input: { requirementIds?: string[]; componentIds?: string[] },
+): Promise<ActionResult<null>> {
   const task = await prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
+  const requirementIds = input.requirementIds ? unique(input.requirementIds) : undefined;
+  const componentIds = input.componentIds ? unique(input.componentIds) : undefined;
   return replaceLinks(
     user,
     task,
-    "component",
-    componentIds,
-    async (tx, projectId, ids) => {
-      await tx.taskComponent.deleteMany({ where: { taskId } });
-      await tx.taskComponent.createMany({ data: ids.map((componentId) => ({ taskId, componentId, projectId })) });
-    },
     "ไม่พบ Task",
+    [
+      { model: "requirement", ids: requirementIds ?? [] },
+      { model: "component", ids: componentIds ?? [] },
+    ],
+    async (tx, projectId) => {
+      if (requirementIds) {
+        await tx.taskRequirement.deleteMany({ where: { taskId } });
+        await tx.taskRequirement.createMany({ data: requirementIds.map((requirementId) => ({ taskId, requirementId, projectId })) });
+      }
+      if (componentIds) {
+        await tx.taskComponent.deleteMany({ where: { taskId } });
+        await tx.taskComponent.createMany({ data: componentIds.map((componentId) => ({ taskId, componentId, projectId })) });
+      }
+    },
   );
 }
 
@@ -498,17 +523,45 @@ export async function setRequirementComponents(
   componentIds: string[],
 ): Promise<ActionResult<null>> {
   const requirement = await prisma.requirement.findUnique({ where: { id: requirementId }, select: { projectId: true } });
+  const wanted = unique(componentIds);
   return replaceLinks(
     user,
     requirement,
-    "component",
-    componentIds,
-    async (tx, projectId, ids) => {
+    "ไม่พบ Requirement",
+    [{ model: "component", ids: wanted }],
+    async (tx, projectId) => {
       await tx.requirementComponent.deleteMany({ where: { requirementId } });
       await tx.requirementComponent.createMany({
-        data: ids.map((componentId) => ({ requirementId, componentId, projectId })),
+        data: wanted.map((componentId) => ({ requirementId, componentId, projectId })),
       });
     },
-    "ไม่พบ Requirement",
+  );
+}
+
+/** The reverse direction, from a component page: the requirements and tasks that point at it, replaced together. */
+export async function setComponentLinks(
+  user: User,
+  componentId: string,
+  input: { requirementIds: string[]; taskIds: string[] },
+): Promise<ActionResult<null>> {
+  const component = await prisma.component.findUnique({ where: { id: componentId }, select: { projectId: true } });
+  const requirementIds = unique(input.requirementIds);
+  const taskIds = unique(input.taskIds);
+  return replaceLinks(
+    user,
+    component,
+    "ไม่พบ Component",
+    [
+      { model: "requirement", ids: requirementIds },
+      { model: "task", ids: taskIds },
+    ],
+    async (tx, projectId) => {
+      await tx.requirementComponent.deleteMany({ where: { componentId } });
+      await tx.requirementComponent.createMany({
+        data: requirementIds.map((requirementId) => ({ requirementId, componentId, projectId })),
+      });
+      await tx.taskComponent.deleteMany({ where: { componentId } });
+      await tx.taskComponent.createMany({ data: taskIds.map((taskId) => ({ taskId, componentId, projectId })) });
+    },
   );
 }
