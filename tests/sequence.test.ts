@@ -80,3 +80,44 @@ test("deleting a row does not free its number", async () => {
   expect(code1).toBe("T-001");
   expect(code2).toBe("T-002");
 });
+
+test("MR codes need a year", async () => {
+  expect(() => formatCode("MR", 1)).toThrow();
+  const p = await project("P1");
+  await expect(issue(p.id, "MR")).rejects.toThrow();
+});
+
+async function overlap(abort: boolean) {
+  const p = await project("P1");
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  let aHasCode!: () => void;
+  const aReady = new Promise<void>((r) => (aHasCode = r));
+  const a = prisma
+    .$transaction(async (tx) => {
+      const code = await nextCode(tx, p.id, "T");
+      aHasCode();
+      await gate;
+      if (abort) throw new Error("rollback A");
+      return code;
+    })
+    .catch(() => "rolled-back");
+  await aReady;
+  let bDone = false;
+  const b = issue(p.id, "T").then((c) => {
+    bDone = true;
+    return c;
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  expect(bDone).toBe(false);
+  release();
+  return { a: await a, b: await b };
+}
+
+test("B waits for A's open transaction and gets the next number after A commits", async () => {
+  expect(await overlap(false)).toEqual({ a: "T-001", b: "T-002" });
+});
+
+test("if A rolls back, B gets the number A would have had", async () => {
+  expect(await overlap(true)).toEqual({ a: "rolled-back", b: "T-001" });
+});

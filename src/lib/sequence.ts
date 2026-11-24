@@ -21,7 +21,8 @@ export function formatCode(prefix: SeqPrefix, no: number, buddhistYear?: number)
     case "C":
       return `C${pad(no, 2)}`;
     case "MR":
-      return `MR-${buddhistYear ?? 0}-${pad(no, 2)}`;
+      if (buddhistYear === undefined) throw new Error("MR codes need a Buddhist year");
+      return `MR-${buddhistYear}-${pad(no, 2)}`;
   }
 }
 
@@ -37,7 +38,10 @@ export async function nextCode(
   prefix: SeqPrefix,
   buddhistYear?: number,
 ): Promise<string> {
+  if (prefix === "MR" && buddhistYear === undefined) throw new Error("MR codes need a Buddhist year");
   const year = buddhistYear ?? 0;
+  // Relies on a single-statement INSERT ... ON CONFLICT under READ COMMITTED: a concurrent caller blocks on the
+  // counter row until this transaction ends, so callers must keep the transaction short (call this right before the insert).
   const row = await tx.docSequence.upsert({
     where: { projectId_prefix_year: { projectId, prefix, year } },
     create: { projectId, prefix, year, lastNo: 1 },
