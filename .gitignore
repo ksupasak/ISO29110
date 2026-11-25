@@ -57,3 +57,6 @@ next-env.d.ts
 # server-side template overrides (admin-editable); defaults live in templates-default/
 /templates/*
 !/templates/.gitkeep
+
+# output of the wp-audio skill (contains real meeting content)
+/wp-output/
